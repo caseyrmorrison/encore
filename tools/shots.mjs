@@ -101,8 +101,19 @@ const S = {
       g.run.pedals.overdrive = 2;
       g.run.pedals.roadie = 1;
       g.run.pedals.fuzz = 1;
-      g.run.level = venue === 1 ? 15 : 26;
-      if (venue === 2) {
+      g.run.level = venue === 1 ? 15 : venue === 2 ? 26 : 33;
+      if (venue >= 3) {
+        // arriving at festival season: roughly what a Mainstage winner carries
+        for (const i of ['tom', 'scratch']) d.give(i);
+        g.run.pattern.addSpare('snare', 4);
+        g.run.pattern.addSpare('hat', 4);
+        g.run.pattern.tracks.forEach((_, i) => g.run.pattern.autoPlace(i));
+        g.run.pedals.harmonizer = 2;
+        g.run.pedals.hypeman = 1;
+        g.run.pattern.fx[4].accent = true;
+        g.run.pattern.fx[12].ratchet = 2;
+      }
+      if (venue >= 2) {
         for (const t of g.run.pattern.tracks) t.level = Math.min(5, t.level + 1);
         g.run.pedals.overdrive = 4;
         g.run.pattern.fx[0].accent = true;

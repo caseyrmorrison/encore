@@ -37,7 +37,13 @@ and **DROP** on the right; weapons auto-aim. Landscape is best.
   son clave, half-time dubstep, three-against-four… each discovered one is remembered.
 - **Evolutions.** Max an instrument and meet its hidden condition to transform it.
 - **Drops.** Fill hype, press `Q`: the game builds to the next downbeat and everything doubles.
-- **Encore.** Beat all three venues and keep your build for an endless, faster encore loop.
+- **Festival season.** Headline the Mainstage and the encore takes your build outside to three
+  enormous festival fields — Sunset Fields, Neon Desert and Megafest — each with its own
+  headliner (CURFEW, THE MIRAGE, THE ALGORITHM, which plays your own pattern back at you).
+  Headline Megafest to complete the world tour, then loop it "after hours", harder every time.
+- **The merch table.** Spend the fans you earn on new instruments *or* permanent upgrades
+  (more damage, health, XP, rerolls, a third dash, a revive…), and collect twelve tour
+  badges that unlock mic skins.
 - **Share a show.** Every run has a seed: *Copy result* or *Save poster* gives your friends a
   `?seed=` link to play the exact same set.
 

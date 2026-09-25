@@ -26,7 +26,25 @@
   1. **The Basement** — 112 BPM, A minor, LED dance floor, red/amber haze. Boss: **FEEDBACK**.
   2. **The Cathedral** — 124 BPM, D minor, marble + stained glass + organ pipes. Boss: **THE CANTOR**.
   3. **The Mainstage** — 136 BPM, E minor, festival stage, lasers, crowd of thousands. Boss: **THE HUSH**.
-- Win → **ENCORE** endless mode: +8 BPM and harder crowds every loop. This is where broken builds sing.
+- Win → **FESTIVAL SEASON**: the encore keeps your build and takes it to three open-air stages,
+  each 2–3× the Mainstage and far busier, each with a new headliner:
+  4. **Sunset Fields** — 128 BPM, G major, golden hour. Boss: **CURFEW** (searchlights that cite
+     you, paper citations, stomps with one gap).
+  5. **Neon Desert** — 140 BPM, F# minor, night playa. Boss: **THE MIRAGE** (copies that fire like
+     the real thing; only the real one's glass throbs on the beat and casts a shadow).
+  6. **Megafest** — 150 BPM, B minor, the biggest stage on Earth. Boss: **THE ALGORITHM** (plays
+     *your* lit steps back at you, skips next to you, sweeps trending beams).
+- Headline Megafest → the world tour loops "after hours": ×3.2 enemy health per loop.
+
+## Meta progression
+
+Fans persist between runs and buy three kinds of things at the merch table:
+- **Instruments** added to the draft pool.
+- **Upgrades** (11, a few levels each): small permanent edges — damage, health, pickup radius,
+  XP, rerolls, a third dash charge, tips, a free opening level-up, luck, hype, one revive.
+  Deliberately modest so skill and the draft still decide a run; the Daily Setlist ignores them.
+- **Tour badges** (12) are earned in play and unlock mic skins (Gold Record, Vaporwave, Toxic,
+  Obsidian, Diamond).
 
 ## Big moments (the "make people happy" budget)
 

@@ -353,7 +353,12 @@ export class HowToScreen {
             icons.pedal('hypeman'),
             'Fill HYPE by silencing enemies, then tap DROP. The room builds to the next downbeat — then everything doubles.',
           ),
-          step('6', 'Headline three venues', 'Survive the set, beat the headliner, spend tips backstage. Win, and the crowd demands an ENCORE — endless and faster.', icons.goldRecord()),
+          step(
+            '6',
+            'Headline the tour',
+            'Survive each set and beat its headliner. Headline the Mainstage and the ENCORE takes your build to festival season: three giant fields, three new headliners. Fans buy instruments and permanent upgrades at the merch table.',
+            icons.goldRecord(),
+          ),
         ]),
         h('div', { class: 'how-keys' }, [
           h('span', { text: 'WASD move' }),
