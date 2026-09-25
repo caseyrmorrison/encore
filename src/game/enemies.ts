@@ -17,10 +17,10 @@ export const ENEMY_DEFS: Record<HushKind, EnemyDef> = {
   mote: { hp: 14, speed: 4.3, radius: 0.55, dmg: 6, xp: 1, mass: 1, scale: 1.3 },
   wisp: { hp: 7, speed: 7.2, radius: 0.4, dmg: 4, xp: 0, mass: 0.5, scale: 1.2 },
   static: { hp: 24, speed: 5.4, radius: 0.6, dmg: 10, xp: 2, mass: 1, scale: 1.25 },
-  mute: { hp: 75, speed: 2.7, radius: 0.8, dmg: 16, xp: 4, mass: 3, scale: 1.2 },
+  mute: { hp: 75, speed: 2.7, radius: 0.8, dmg: 13, xp: 4, mass: 3, scale: 1.2 },
   damper: { hp: 55, speed: 3.0, radius: 0.95, dmg: 12, xp: 3, mass: 3, scale: 1.2 },
   shusher: { hp: 34, speed: 3.3, radius: 0.55, dmg: 8, xp: 2, mass: 1.2, scale: 1.25 },
-  bouncer: { hp: 460, speed: 3.7, radius: 1.2, dmg: 24, xp: 30, mass: 9, scale: 1.2 },
+  bouncer: { hp: 460, speed: 3.7, radius: 1.2, dmg: 18, xp: 30, mass: 9, scale: 1.2 },
 };
 
 export const DAMPER_RADIUS = 5;

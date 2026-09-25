@@ -33,6 +33,7 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         window: 'readonly',
+        document: 'readonly',
         console: 'readonly',
         process: 'readonly',
         setTimeout: 'readonly',

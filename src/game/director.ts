@@ -16,7 +16,7 @@ export const TUNING: VenueTuning[] = [
   {
     length: 165,
     rate0: 2.2,
-    rateGrowth: 1 / 20,
+    rateGrowth: 1 / 24,
     hp: 1,
     unlock: { mote: 0, static: 0.15, shusher: 0.32, mute: 0.45, damper: 0.62 },
     elitesAt: [0.38, 0.74],
