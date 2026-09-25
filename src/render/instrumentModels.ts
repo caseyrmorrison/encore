@@ -910,20 +910,6 @@ function labelTex(lines: string[], bg: string, fg: string, w = 512, h = 320): TH
   });
 }
 
-function stompbox(color: number, knobs: number, extra?: (g: THREE.Group) => void): THREE.Group {
-  const g = buildPedal(color);
-  // buildPedal already has 3 knobs; hide extras when fewer are wanted
-  let seen = 0;
-  g.traverse((o) => {
-    if (o instanceof THREE.Mesh && o.geometry instanceof THREE.CylinderGeometry && o.position.y > 0.6) {
-      seen++;
-      if (seen > knobs) o.visible = false;
-    }
-  });
-  extra?.(g);
-  return g;
-}
-
 /** One bold word filling most of the texture height (labelTex keeps its title line small). */
 function wordTex(text: string, bg: string, fg: string, w: number, h: number): THREE.CanvasTexture {
   return canvasTexture(w, h, (g) => {
@@ -1288,15 +1274,30 @@ export function buildGear(id: string, color: number): THREE.Group {
       return g;
     }
     case 'looper': {
-      const p = stompbox(color, 1);
-      const ring = mesh(new THREE.TorusGeometry(0.42, 0.06, 10, 40), M.glow(0x9fb8ff, 3.5));
-      ring.position.set(0, -0.55, 0.36);
-      p.add(ring);
-      const big = mesh(cyl(0.34, 0.2, 32), M.chrome());
-      big.rotation.x = Math.PI / 2;
-      big.position.set(0, -0.55, 0.36);
-      p.add(big);
-      return p;
+      // a loop station: wide wedge, one giant glowing "loop" arrow, a little LED counter —
+      // no knob pair (two knobs over a round switch read as a face)
+      const deck = mesh(new THREE.BoxGeometry(2.4, 0.5, 1.8), M.shell(color));
+      deck.position.y = 0.25;
+      g.add(deck);
+      const top = mesh(new THREE.BoxGeometry(2.3, 0.04, 1.7), M.darkChrome());
+      top.position.y = 0.52;
+      g.add(top);
+      const arc = mesh(new THREE.TorusGeometry(0.55, 0.09, 12, 48, Math.PI * 1.55), M.glow(0x9fb8ff, 3.5));
+      arc.rotation.set(-Math.PI / 2, 0, 0.4);
+      arc.position.set(-0.2, 0.58, 0.05);
+      g.add(arc);
+      const head = mesh(new THREE.ConeGeometry(0.2, 0.34, 3), M.glow(0x9fb8ff, 3.5));
+      head.rotation.set(-Math.PI / 2, 0, -1.2);
+      head.position.set(-0.2 + Math.cos(0.4) * 0.55, 0.6, 0.05 - Math.sin(0.4) * 0.55);
+      g.add(head);
+      const btn = mesh(cyl(0.26, 0.12, 24), M.chrome());
+      btn.position.set(-0.2, 0.6, 0.05);
+      g.add(btn);
+      const screen = mesh(new THREE.BoxGeometry(0.62, 0.05, 0.4), M.glow(0xff3b5c, 2.2));
+      screen.position.set(0.72, 0.56, -0.45);
+      g.add(screen);
+      g.rotation.set(0.75, -0.35, 0);
+      return g;
     }
     case 'groupies': {
       const card = mesh(new THREE.BoxGeometry(1.4, 2.0, 0.05), new THREE.MeshStandardMaterial({ map: labelTex(['ALL', 'ACCESS', '★ ENCORE ★'], '#ff2d78', '#ffffff', 320, 460), roughness: 0.4 }));
