@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SpatialHash } from '../core/spatialHash';
-import { HushBatch, hushLooks, moteVariant, type HushKind } from '../render/hush';
+import { ACCESSORY_COLOR, HushBatch, hushLooks, moteVariant, type HushKind } from '../render/hush';
 import type { VenueId } from '../render/venues/venue';
 import { clampToBounds, pushOutOfObstacles, type Bounds } from '../render/venues/venue';
 
@@ -182,6 +182,7 @@ export class EnemyManager {
   /** Dress the fodder for the room. */
   setVenue(id: VenueId): void {
     this.batches.mote.setGeometry(moteVariant(id));
+    for (const b of Object.values(this.batches)) b.setAccessory(ACCESSORY_COLOR[id] ?? 0xff2dd4);
   }
 
   spawn(kind: HushKind, x: number, z: number, hpMult: number, elite = false): Enemy | null {
@@ -448,6 +449,29 @@ export class EnemyManager {
 
   setCameraDir(d: THREE.Vector3): void {
     for (const b of Object.values(this.batches)) (b.material.uniforms.uCamDir!.value as THREE.Vector3).copy(d);
+    // the eye plane's axes (same construction as the shader) so pupils can look at the player
+    this.eyeRight.set(0, 1, 0).cross(d).normalize();
+    this.eyeUp.copy(d).cross(this.eyeRight);
+  }
+
+  /** Where the performer is: every Hush's pupils follow them. */
+  setPlayer(x: number, z: number): void {
+    this.px = x;
+    this.pz = z;
+  }
+
+  private readonly eyeRight = new THREE.Vector3(1, 0, 0);
+  private readonly eyeUp = new THREE.Vector3(0, 0, -1);
+  private px = 0;
+  private pz = 0;
+
+  private lookAt(e: Enemy): [number, number] {
+    const dx = this.px - e.x;
+    const dz = this.pz - e.z;
+    const l = Math.hypot(dx, dz) || 1;
+    LOOK[0] = (dx * this.eyeRight.x + dz * this.eyeRight.z) / l;
+    LOOK[1] = (dx * this.eyeUp.x + dz * this.eyeUp.z) / l;
+    return LOOK;
   }
 
   render(time: number, beatPhase: number): void {
@@ -476,6 +500,7 @@ export class EnemyManager {
         e.freeze > 0 ? 1 : e.stun > 0 ? 0.5 : 0,
         e.elite ? 1 : 0,
         e.freeze > 0 ? 0 : pulse,
+        ...this.lookAt(e),
       );
     }
     for (const b of Object.values(this.batches)) b.end(time, pulse);
@@ -483,6 +508,8 @@ export class EnemyManager {
     this.shadows.instanceMatrix.needsUpdate = true;
   }
 }
+
+const LOOK: [number, number] = [0, 0];
 
 function easeOutBack(t: number): number {
   const c1 = 1.70158;

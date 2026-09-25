@@ -491,6 +491,56 @@ const S = {
     await dance(4000);
     await shot('boss3-silence');
   },
+  /** Close-up of the enemy line-up (--venue=N dresses them for that stop). */
+  async critters() {
+    const v = Number(opt('venue', '0'));
+    await start();
+    await E((v) => {
+      const d = window.__encore;
+      d.god();
+      if (v > 0) d.venue(v);
+    }, v);
+    await sleep(1200);
+    await E(() => {
+      const g = window.__encore.game;
+      const kinds = ['mote', 'mote', 'mote', 'shusher', 'mute', 'static', 'damper', 'bouncer'];
+      kinds.forEach((k, i) => {
+        const e = g.enemies.spawn(k, g.player.x - 7 + i * 2, g.player.z - 5, 50, false);
+        if (e) {
+          e.speed = 0.4;
+          e.spawnT = 1;
+        }
+      });
+      window.__encore.cam(15, 0.62);
+    });
+    await sleep(1400);
+    await shot(`critters${v}`);
+    await E(() => window.__encore.cam(0));
+  },
+  /** Any headliner: --venue=N. Entrance, the fight, then phase two. */
+  async bossat() {
+    const v = Number(opt('venue', '3'));
+    await start();
+    await E((v) => {
+      const d = window.__encore;
+      d.god();
+      for (const i of ['hat', 'bass', 'lead', 'clap']) d.give(i);
+      d.venue(v);
+    }, v);
+    await sleep(1500);
+    await E(() => window.__encore.skip(999));
+    await page.waitForFunction(() => !!window.__encore.game.boss, null, { timeout: 15000 });
+    await sleep(900);
+    await shot(`boss${v}-intro`);
+    await dance(4500);
+    await shot(`boss${v}-a`);
+    await E(() => {
+      const g = window.__encore.game;
+      if (g.boss?.entry) g.boss.entry.hp = g.boss.entry.maxHp * 0.45;
+    });
+    await dance(4500);
+    await shot(`boss${v}-b`);
+  },
   /** Inspect any tour stop: --venue=N (3 fields, 4 desert, 5 megafest). Play shot, wide shot, far vista. */
   async stage() {
     const v = Number(opt('venue', '3'));

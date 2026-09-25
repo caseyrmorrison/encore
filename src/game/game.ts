@@ -42,6 +42,7 @@ import { SeqEditor } from '../ui/seqEditor';
 import { TouchControls } from '../ui/touch';
 import { Band } from './band';
 import { Boss, Cantor, Feedback, TheHush, type BossCtx } from './bosses';
+import { Algorithm, Curfew, Mirage } from './festivalBosses';
 import { Director } from './director';
 import { CLUB_FINAL, FESTIVAL_START, isFinalStop, stopName, TOUR, TOUR_FINAL } from './tour';
 import { DAMPER_RADIUS, EnemyManager, type Enemy } from './enemies';
@@ -997,7 +998,7 @@ export class Game {
       p.z,
       p.radius * 0.8,
       this.venue.bounds,
-      { hit: (pr, e) => this.projectileHit(pr, e), hitPlayer: (pr) => this.hurt(8 * (1 + run.venueIndex * 0.35), pr.x, pr.z, 'shot') },
+      { hit: (pr, e) => this.projectileHit(pr, e), hitPlayer: (pr) => this.hurt(8 * (1 + Math.min(2, run.venueIndex) * 0.35 + Math.max(0, run.venueIndex - 2) * 0.2), pr.x, pr.z, 'shot') },
       this.glow,
       this.dark,
       false,
@@ -1815,7 +1816,7 @@ export class Game {
 
   private spawnBoss(): void {
     const rim = this.venue.palette.rim;
-    this.boss = this.venue.id === 'basement' ? new Feedback(rim) : this.venue.id === 'cathedral' ? new Cantor(rim) : new TheHush(rim);
+    this.boss = this.makeBoss(rim);
     const p = this.player;
     let bx = p.x;
     let bz = p.z - 12;
@@ -1856,6 +1857,23 @@ export class Game {
     V.crowdCheer(this.audio, this.audio.now + 0.3, 0.7, 2.5);
     this.rig.addTrauma(0.6 * this.save.settings.shake);
     this.ground.add(GroundKind.Shock, bx, bz, 1, 16, 0.8, this.boss.color, { thickness: 0.06 });
+  }
+
+  private makeBoss(rim: THREE.Color): Boss {
+    switch (this.venue.id) {
+      case 'basement':
+        return new Feedback(rim);
+      case 'cathedral':
+        return new Cantor(rim);
+      case 'mainstage':
+        return new TheHush(rim);
+      case 'fields':
+        return new Curfew();
+      case 'desert':
+        return new Mirage();
+      case 'megafest':
+        return new Algorithm();
+    }
   }
 
   /** The entrance ends: chrome returns and the fight starts with a shove of sound. */
@@ -2528,6 +2546,7 @@ export class Game {
 
     this.stage.camera.getWorldDirection(this.camDir).negate();
     this.enemies.setCameraDir(this.camDir);
+    this.enemies.setPlayer(p.x, p.z);
     this.enemies.render(this.time, beatPhase);
     if (drop && dt > 0) {
       // paper confetti rains for the whole drop
@@ -2722,6 +2741,14 @@ export class Game {
       setSilence: (on) => {
         this.hud.announce(on ? 'THE SILENCE' : 'SOUND RETURNS', on ? 'build hype and DROP to break it' : 'the Hush is staggered — hit it!', on ? '#8060ff' : '#ffffff', 3);
         if (on) this.run!.hype = Math.max(this.run!.hype, 0.4);
+      },
+      announce: (title, sub, color) => this.hud.announce(title, sub, color, 2.6),
+      patternHits: (step) => {
+        const run = this.run;
+        if (!run) return 0;
+        let n = 0;
+        for (const t of run.pattern.tracks) if (t.notes[step]) n++;
+        return n;
       },
       crowdAid: (n) => {
         const p = this.player;

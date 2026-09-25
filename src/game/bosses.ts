@@ -38,6 +38,10 @@ export interface BossCtx {
   setSilence(on: boolean): void;
   /** The crowd throws the performer a lifeline: hearts land near the player. */
   crowdAid(hearts: number): void;
+  /** Big centre-screen phase callout. */
+  announce(title: string, sub: string, color: string): void;
+  /** How many of the player's tracks have a note on this step (THE ALGORITHM plays it back). */
+  patternHits(step: number): number;
   hpMult: number;
   /** camera orientation, for billboards */
   camQuat: THREE.Quaternion;
@@ -140,6 +144,7 @@ export class Feedback extends Boss {
     super();
     const look = hushLooks().bouncer;
     this.bodyMat = makeHushMaterial(look, rim, new THREE.Color(0x401010));
+    this.bodyMat.uniforms.uWalk!.value = 0;
     (this.bodyMat.uniforms.uEyeParams!.value as THREE.Vector4).set(99, 0, 0, 0);
     const body = new THREE.Group();
     body.scale.setScalar(1.3);
@@ -698,7 +703,12 @@ export class TheHush extends Boss {
     (this.bodyMat.uniforms.uEyeParams!.value as THREE.Vector4).set(0.6, 0.16, 0.2, 5);
     (this.bodyMat.uniforms.uRimShape!.value as THREE.Vector2).set(6, 0.5);
     this.bodyMat.uniforms.uVoid!.value = 1;
-    this.sun = new THREE.Mesh(look.geometry, this.bodyMat);
+    // a clean sphere (the fodder's body now has feet and arms) and no waddling
+    this.bodyMat.uniforms.uWalk!.value = 0;
+    const orb = new THREE.SphereGeometry(0.5, 48, 32);
+    orb.scale(1, 0.9, 1);
+    orb.translate(0, 0.48, 0);
+    this.sun = new THREE.Mesh(orb, this.bodyMat);
     this.sun.scale.setScalar(8);
     this.sun.position.y = -1;
     this.group.add(this.sun);
