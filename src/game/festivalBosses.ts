@@ -462,7 +462,8 @@ export class Mirage extends Boss {
       e.scripted = true;
       e.maxHp = e.hp = (this.entry?.maxHp ?? 1000) * 0.03;
       e.radius = 3;
-      e.dmg = 18;
+      // copies drift to their stations and may brush past you: a sting, not a hammer
+      e.dmg = 8;
       e.xp = 0;
       e.mass = 999;
       const g = new THREE.Group();
