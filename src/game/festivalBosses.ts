@@ -300,7 +300,7 @@ export class Curfew extends Boss {
         s.hit = true;
         if (!ctx.playerInvuln && !inGap) ctx.hurtPlayer(12, e.x, e.z);
       }
-      ctx.ground.add(GroundKind.Wave, e.x, e.z, s.r, s.r, dt * 1.5, this.color, { thickness: 0.02, alpha: 1, fixed: true, rot: s.gap });
+      ctx.ground.add(GroundKind.Wave, e.x, e.z, s.r, s.r, dt * 1.5, 0x9fc4ff, { thickness: 0.04, alpha: 1, fixed: true, rot: s.gap });
       if (s.r > 44) this.stomps.splice(i, 1);
     }
   }
@@ -346,6 +346,8 @@ interface Decoy {
   entry: Enemy;
   id: number;
   group: THREE.Group;
+  shards: THREE.Mesh[];
+  core: THREE.Object3D | undefined;
 }
 
 const PRISM_VERT = /* glsl */ `
@@ -378,12 +380,12 @@ void main() {
   vec3 col = mix(vec3(0.03, 0.02, 0.06), film, 0.25 + fres * 0.75);
   col += film * pow(fres, 3.0) * 1.6;
   col += vec3(1.0) * uFlash * fres * 2.0;
-  // the tell: only the real one's glass throbs with the music
-  col += film * uBeat * (1.0 - uGhost) * 0.9;
   // decoys shimmer: scanline heat haze
   float haze = 0.5 + 0.5 * sin(vObj.y * 30.0 + uTime * 12.0);
-  float a = mix(1.0, 0.55 + haze * 0.3, uGhost);
-  gl_FragColor = vec4(col, a);
+  col += film * haze * uGhost * 0.12;
+  // the rhythm tell (uBeat is on-beat for the real one, off-beat for the copies)
+  col += film * uBeat * 0.9;
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
 /**
@@ -412,17 +414,16 @@ export class Mirage extends Boss {
       fragmentShader: PRISM_FRAG,
       uniforms: { uTime: { value: 0 }, uFlash: { value: 0 }, uGhost: { value: 0 }, uBeat: { value: 0 } },
     });
+    // copies are exact (same solid glass, same shards): only the rhythm gives them away —
+    // the real one throbs on the beat, copies throb on the off-beat
     this.ghostMat = this.mat.clone();
     this.ghostMat.uniforms.uGhost!.value = 1;
-    this.ghostMat.uniforms.uBeat!.value = 0;
-    this.ghostMat.transparent = true;
-    this.ghostMat.depthWrite = false;
     this.buildFigure(this.group, this.mat, true);
     this.core = this.group.getObjectByName('core') as THREE.Mesh;
   }
 
   /** The figure: a stack of prisms (head, torso, flared robe) with orbiting shards and a core. */
-  private buildFigure(parent: THREE.Group, mat: THREE.ShaderMaterial, real: boolean): void {
+  private buildFigure(parent: THREE.Group, mat: THREE.ShaderMaterial, real: boolean): THREE.Mesh[] {
     const robe = new THREE.Mesh(new THREE.ConeGeometry(2.2, 4.6, 6, 1, true), mat);
     robe.position.y = 2.3;
     parent.add(robe);
@@ -437,14 +438,16 @@ export class Mirage extends Boss {
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 1), M.glow(0xff9af0, 5));
     core.position.set(0, 5.3, 1.35);
     core.name = 'core';
-    core.visible = real;
     parent.add(core);
+    const shards: THREE.Mesh[] = [];
     for (let i = 0; i < 6; i++) {
       const s = new THREE.Mesh(new THREE.TetrahedronGeometry(0.6, 0), mat);
       s.userData.a = (i / 6) * TAU;
       parent.add(s);
-      if (real) this.shards.push(s);
+      shards.push(s);
     }
+    if (real) this.shards.push(...shards);
+    return shards;
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
@@ -460,6 +463,7 @@ export class Mirage extends Boss {
       const e = ctx.enemies.spawn('mute', this.x + Math.cos(a) * 10, this.z + Math.sin(a) * 10, 1, false);
       if (!e) continue;
       e.scripted = true;
+      e.decoy = true;
       e.maxHp = e.hp = (this.entry?.maxHp ?? 1000) * 0.03;
       e.radius = 3;
       // copies drift to their stations and may brush past you: a sting, not a hammer
@@ -467,12 +471,12 @@ export class Mirage extends Boss {
       e.xp = 0;
       e.mass = 999;
       const g = new THREE.Group();
-      this.buildFigure(g, this.ghostMat, false);
+      const shards = this.buildFigure(g, this.ghostMat, false);
       g.position.set(e.x, 0, e.z);
       // before the boss is attached, copies ride along as extras (attach adds them)
       if (this.group.parent) this.group.parent.add(g);
       else this.extras.push(g);
-      this.decoys.push({ entry: e, id: e.id, group: g });
+      this.decoys.push({ entry: e, id: e.id, group: g, shards, core: g.getObjectByName('core') });
     }
   }
 
@@ -554,6 +558,8 @@ export class Mirage extends Boss {
     this.mat.uniforms.uFlash!.value = this.flash;
     this.mat.uniforms.uBeat!.value = kick;
     this.ghostMat.uniforms.uTime!.value = time;
+    const off = Math.pow(1 - ((beatPhase + 0.5) % 1), 3);
+    this.ghostMat.uniforms.uBeat!.value = off;
     // the tell: the real core beats with the music
     this.core.scale.setScalar(1 + kick * 0.6);
     for (const s of this.shards) {
@@ -575,6 +581,12 @@ export class Mirage extends Boss {
       const q = dcy.entry;
       dcy.group.position.set(q.x, 1 + Math.sin(time * 1.4 + i) * 0.4, q.z);
       dcy.group.rotation.y = time * 0.3 + i;
+      dcy.core?.scale.setScalar(1 + off * 0.6);
+      for (const sh of dcy.shards) {
+        const a = sh.userData.a + time * 1.3;
+        sh.position.set(Math.cos(a) * 3, 5 + Math.sin(time * 2 + a) * 0.8, Math.sin(a) * 3);
+        sh.rotation.set(time, time * 1.3, 0);
+      }
     }
     // sand-worms
     for (let i = this.worms.length - 1; i >= 0; i--) {
@@ -643,7 +655,8 @@ export class Algorithm extends Boss {
   private readonly q = new THREE.Quaternion();
   private readonly v = new THREE.Vector3();
   private readonly s = new THREE.Vector3(1, 1, 1);
-  private feedT = 0;
+  private rows: { notes: readonly boolean[]; css: string }[] = [];
+  private step = 0;
 
   constructor() {
     super();
@@ -697,6 +710,10 @@ export class Algorithm extends Boss {
 
   onStep(ctx: BossCtx, step: number, bar: number): void {
     if (!this.entry?.alive) return;
+    // its screens show YOUR machine, playhead and all: what it fires next is what you'd play
+    this.rows = ctx.patternRows();
+    this.step = step;
+    this.drawFeed(this.t);
     // AUTOPLAY: every lit step of YOUR machine fires back at you
     // (a dense machine would make this a wall: the volley is capped, and in phase two it
     // plays every step but aims either side of you on alternate steps)
@@ -752,15 +769,12 @@ export class Algorithm extends Boss {
     }
     const kick = Math.pow(1 - beatPhase, 3);
     this.group.position.set(e.x, Math.sin(time) * 0.3, e.z);
-    this.cube.rotation.set(time * 0.3, time * 0.45, 0);
+    // turn on one axis, tipped toward the camera, so a screen always faces you
+    this.cube.rotation.set(-0.35, time * 0.35, 0);
     this.cube.scale.setScalar(1 + kick * 0.05);
     this.spinner.rotation.z = -time * 4;
     this.shellMat.emissiveIntensity = Math.min(0.4, e.flash * 0.5);
-    this.feedT += dt;
-    if (this.feedT > 0.12) {
-      this.feedT = 0;
-      this.drawFeed(time);
-    }
+    this.t = time;
     // phones orbit on two tilted rings
     for (let i = 0; i < 24; i++) {
       const ring = i % 2;
@@ -790,41 +804,54 @@ export class Algorithm extends Boss {
     }
   }
 
-  /** The feed: scrolling thumbnails around a big play-button eye that looks at you. */
+  /** The feed: your own drum machine under a play-button eye, with a caption that it's copying you. */
   private drawFeed(time: number): void {
     const g = this.feedCtx;
     const w = 256;
     g.fillStyle = '#05050a';
     g.fillRect(0, 0, w, w);
-    const pal = ['#ff2d78', '#2ee6ff', '#ffd36b', '#8cff5a', '#b04dff'];
-    const off = (time * 60) % 64;
-    for (let y = -64; y < w; y += 64)
-      for (let x = 0; x < w; x += 64) {
-        g.fillStyle = pal[((x + y + Math.floor(time * 2) * 64) / 64) % pal.length | 0]!;
-        g.globalAlpha = 0.22;
-        g.fillRect(x + 4, y + off + 4, 56, 56);
-      }
-    g.globalAlpha = 1;
     // the eye: a white play triangle in a cyan→magenta lozenge
-    const grad = g.createLinearGradient(58, 78, 198, 178);
+    const grad = g.createLinearGradient(78, 14, 178, 84);
     grad.addColorStop(0, '#2ee6ff');
     grad.addColorStop(1, '#ff2dd4');
     g.fillStyle = grad;
     g.beginPath();
-    g.roundRect(58, 78, 140, 100, 50);
+    g.roundRect(78, 14, 100, 70, 35);
     g.fill();
     g.fillStyle = '#ffffff';
     g.beginPath();
-    g.moveTo(108, 100);
-    g.lineTo(158, 128);
-    g.lineTo(108, 156);
+    g.moveTo(116, 32);
+    g.lineTo(148, 49);
+    g.lineTo(116, 66);
     g.closePath();
     g.fill();
+    g.fillStyle = '#ffffff';
+    g.font = '600 13px "JetBrains Mono", monospace';
+    g.textAlign = 'center';
+    g.fillText('NOW PLAYING: YOUR SONG', w / 2, 104);
+    // the grid: one row per track, the step it's about to fire back lit white
+    const rows = this.rows.length ? this.rows : [{ notes: new Array<boolean>(16).fill(false), css: '#444' }];
+    const top = 116;
+    const rh = Math.min(16, 124 / rows.length);
+    const cw = (w - 24) / 16;
+    rows.forEach((r, i) => {
+      for (let s = 0; s < 16; s++) {
+        const on = r.notes[s];
+        const x = 12 + s * cw;
+        const y = top + i * rh;
+        g.fillStyle = on ? r.css : s % 4 === 0 ? '#202028' : '#15151b';
+        if (on && s === this.step) g.fillStyle = '#ffffff';
+        g.fillRect(x + 1, y + 1, cw - 2, rh - 2);
+      }
+    });
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 2;
+    g.strokeRect(12 + this.step * cw, top, cw, rows.length * rh);
     // progress bar that never finishes
     g.fillStyle = '#ffffff33';
-    g.fillRect(20, 226, 216, 6);
+    g.fillRect(20, 246, 216, 4);
     g.fillStyle = '#2ee6ff';
-    g.fillRect(20, 226, 216 * ((time * 0.05) % 1), 6);
+    g.fillRect(20, 246, 216 * ((time * 0.05) % 1), 4);
     this.feed.needsUpdate = true;
   }
 }

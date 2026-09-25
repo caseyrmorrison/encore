@@ -42,6 +42,8 @@ export interface BossCtx {
   announce(title: string, sub: string, color: string): void;
   /** How many of the player's tracks have a note on this step (THE ALGORITHM plays it back). */
   patternHits(step: number): number;
+  /** The player's machine, row by row (THE ALGORITHM shows it on its screens). */
+  patternRows(): { notes: readonly boolean[]; css: string }[];
   hpMult: number;
   /** camera orientation, for billboards */
   camQuat: THREE.Quaternion;

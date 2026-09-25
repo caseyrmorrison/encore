@@ -476,9 +476,9 @@ export function moteVariant(venue: string): THREE.BufferGeometry {
     }
     case 'fields': {
       // a crown of glowing wildflowers
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2;
-        const f = new THREE.SphereGeometry(0.06, 8, 6);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const f = new THREE.SphereGeometry(0.095, 10, 8);
         f.translate(Math.cos(a) * 0.36, 0.92, Math.sin(a) * 0.36);
         parts.push(tagPart(f, PART.glow));
       }

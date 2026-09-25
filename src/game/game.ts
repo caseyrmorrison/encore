@@ -135,6 +135,8 @@ export class Game {
   private reqBase = { kills: 0, perfects: 0, drops: 0, grooves: 0 };
   private reqStreak = 0;
   private lastHitAt = 0;
+  /** badges earned since the last results screen (shown there: plaques hide in cutscenes) */
+  private badgesThisShow: BadgeId[] = [];
   /** took any damage in this venue (Flawless Set badge) */
   private hitThisVenue = false;
   /** dev only: camera override for inspecting stages */
@@ -641,6 +643,11 @@ export class Game {
       newBestHit,
       trophy: won ? this.icons.goldRecord() : undefined,
       tier: run.venueIndex >= TOUR_FINAL ? 'world' : run.venueIndex >= CLUB_FINAL ? 'club' : undefined,
+      badges: this.badgesThisShow.splice(0).map((b) => ({
+        name: BADGES[b].name,
+        color: BADGES[b].color,
+        skin: BADGES[b].skin ? SKINS[BADGES[b].skin!].name : undefined,
+      })),
       strip: tourStrip(
         TOUR.map((t) => t.name),
         FESTIVAL_START,
@@ -1304,7 +1311,7 @@ export class Game {
     this.ground.add(GroundKind.Ring, p.x, p.z, 0.5, r * 1.6, 0.5, 0xffffff, { thickness: 0.04 });
     this.glow.burst(p.x, 1, p.z, 22, core, 10, { life: 0.45, size: 0.4, shape: Shape.Spark });
     this.venue.ripple(p.x, p.z, core, 0.8);
-    this.stage.aberrationKick = Math.min(1, this.stage.aberrationKick + 0.5);
+    if (this.save.settings.flashes) this.stage.aberrationKick = Math.min(1, this.stage.aberrationKick + 0.2);
     this.rig.punch(2.5);
     this.slowMo = Math.max(this.slowMo, 0.08);
   }
@@ -1486,7 +1493,10 @@ export class Game {
       if (dmg >= 1e6) this.award('million');
       this.celebrate(`NEW RECORD HIT · ${formatInt(m)}+`, formatInt(Math.round(dmg)), 'damage from a single note', '#ffc53d', e.x, e.z);
     }
-    if (!o.quiet) {
+    if (e.decoy) {
+      // a copy takes the hit and shimmers: no number, so it never looks like progress
+      if (Math.random() < 0.3) this.glow.emit({ x: e.x + (Math.random() - 0.5) * 3, y: 3 + Math.random() * 3, z: e.z, vy: 1, life: 0.35, size: 0.35, color: 0xffffff, shape: Shape.Spark, alpha: 0.7 });
+    } else if (!o.quiet) {
       // accumulate; flushed as one number per enemy every ~0.18s (or on death)
       if (e.numAcc === 0) e.numT = 0.28;
       e.numAcc += dmg;
@@ -1630,7 +1640,7 @@ export class Game {
 
   private updateRequest(): void {
     const q = this.request;
-    if (!q || !this.run) return this.hud.setRequest(null);
+    if (!q || !this.run || this.finaleT >= 0) return this.hud.setRequest(null);
     const n = q.done ? q.goal : this.requestProgress();
     if (!q.done && n >= q.goal) {
       q.done = true;
@@ -1651,6 +1661,7 @@ export class Game {
   private award(id: BadgeId): void {
     if (this.save.badges.includes(id)) return;
     this.save.badges.push(id);
+    this.badgesThisShow.push(id);
     writeSave(this.save);
     const b = BADGES[id];
     const sub = b.skin ? `${b.how} · unlocked the ${SKINS[b.skin].name.toUpperCase()} mic` : b.how;
@@ -1801,7 +1812,7 @@ export class Game {
     this.playerModel.hurt();
     this.muffleHurt = 1;
     this.rig.addTrauma(0.45 * this.save.settings.shake);
-    this.stage.aberrationKick = 1;
+    if (this.save.settings.flashes) this.stage.aberrationKick = 1;
     this.flashScreen('rgba(255,30,60,0.28)');
     V.hurt(this.audio, this.audio.now);
     this.hitStop = Math.max(this.hitStop, 0.05);
@@ -1868,7 +1879,7 @@ export class Game {
     this.hitStop = 0.14;
     this.rig.addTrauma(0.8 * this.save.settings.shake);
     this.rig.punch(10, 4);
-    this.stage.aberrationKick = 1;
+    if (this.save.settings.flashes) this.stage.aberrationKick = 1;
     this.stage.bloomKick = 2.5;
     this.flashScreen('rgba(255,255,255,0.55)');
     this.hud.announce('DROP!', `${run.stats.dropBars} BARS · EVERYTHING ×2`, '#ff2d78', 1.1, true);
@@ -2094,7 +2105,7 @@ export class Game {
     this.schedule(0.3, () => {
       this.glow.burst(x, top, z, 110, c, 20, { vy: 5, life: 1.8, size: 0.5, shape: Shape.Spark, gravity: 5, drag: 1.5 });
       this.glow.burst(x, top, z, 30, 0xffffff, 9, { life: 0.5, size: 0.35, shape: Shape.Dot, drag: 3 });
-      this.glow.emit({ x, y: top, z, life: 0.45, size: 13, sizeEnd: 18, color: c, shape: Shape.Ring, alpha: 0.6 });
+      this.glow.emit({ x, y: top, z, life: 0.3, size: 7, sizeEnd: 12, color: c, shape: Shape.Ring, alpha: 0.22 });
       this.ground.add(GroundKind.Disc, x, z, 1, 8, 0.5, c, { alpha: 0.35 });
       V.kick(this.audio, this.audio.now, 0.45, true);
       V.crash(this.audio, this.audio.now + 0.02, 0.3);
@@ -2874,6 +2885,7 @@ export class Game {
         for (const t of run.pattern.tracks) if (t.notes[step]) n++;
         return n;
       },
+      patternRows: () => this.run?.pattern.tracks.map((t) => ({ notes: t.notes, css: INSTRUMENTS[t.inst].css })) ?? [],
       crowdAid: (n) => {
         const p = this.player;
         for (let i = 0; i < n; i++) {

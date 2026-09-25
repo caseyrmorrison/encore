@@ -173,6 +173,8 @@ void main() {
   col = mix(col * vec3(0.72, 0.8, 1.0), col, mown);
   // golden hour: the field warms toward the sun behind the stage, cools toward the crowd
   col *= mix(vec3(0.9, 0.95, 1.08), vec3(1.14, 1.0, 0.8), smoothstep(45.0, -55.0, w.y + w.x * 0.35));
+  // the gameplay camera sees the field, not the sky: carry the sunset's warmth onto the grass
+  col *= vec3(1.3, 1.16, 0.86);
 
   // wind: waves of sheen roll across the grass
   vec2 wd = vec2(0.93, 0.36);
@@ -300,7 +302,8 @@ export class Fields implements Venue {
   readonly progression = 'fields' as const;
   readonly bounds: Bounds = { kind: 'rect', hx: HX, hz: HZ };
   readonly palette: VenuePalette = {
-    rim: new THREE.Color(0xc07ad8),
+    // warm cream edge: the black velvet Hush must pop off dusky grass
+    rim: new THREE.Color(0xffe2b0),
     floor: new THREE.Color(0xd0b060),
     accents: [0xff4f8b, 0xffa02e, 0xffe46b, 0x9b6bff],
     fog: 0x3e2e4c,
@@ -364,12 +367,7 @@ export class Fields implements Venue {
       [-PX, 5.7, 11.5],
       [-PX, 5.7, PZ],
       [-38, 5.7, PZ],
-      [-25.5, 5.7, PZ],
-      [-13, 5.7, PZ],
-      [-3.4, 5.3, PZ],
-      // crossing over the middle of the field
-      [13, 5.7, PZ],
-      [stage.corners[1].x, stage.corners[1].y, stage.corners[1].z],
+      // (strings that crossed the middle of the field made a web over the fight: cut)
     ];
     let sid = 0;
     MASTS.forEach(([mx, mz], mi) => {

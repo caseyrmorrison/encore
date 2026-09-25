@@ -63,6 +63,8 @@ export interface Enemy {
   lastHitT: number;
   /** Driven by a boss script: skipped by the swarm AI and the instanced renderer. */
   scripted: boolean;
+  /** a boss decoy (THE MIRAGE): hits never show numbers, only a shimmer */
+  decoy: boolean;
   /** damage waiting to be shown as one number (keeps shockwave spam readable) */
   numAcc: number;
   numT: number;
@@ -168,6 +170,7 @@ export class EnemyManager {
       lastHitBy: 0,
       lastHitT: 0,
       scripted: false,
+      decoy: false,
       numAcc: 0,
       numT: 0,
       numCrit: false,
@@ -227,6 +230,7 @@ export class EnemyManager {
     e.lastHitBy = 0;
     e.lastHitT = 0;
     e.scripted = false;
+    e.decoy = false;
     e.numAcc = 0;
     e.numT = 0;
     e.numCrit = false;

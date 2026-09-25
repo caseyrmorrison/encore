@@ -293,7 +293,7 @@ export class SettingsScreen {
       section('FEEL'),
       slider('Screen shake', 'shake'),
       toggle('Auto-aim', 'autoAim', 'Weapons target the nearest enemy instead of your cursor'),
-      toggle('Strobes & flashes', 'flashes', 'Turn off to reduce flashing lights'),
+      toggle('Strobes & flashes', 'flashes', 'Turn off to reduce flashing lights and colour fringing'),
       section('PICTURE'),
       h('div', { class: 'set-row' }, [h('span', { text: 'Graphics' }), quality]),
     );
@@ -416,6 +416,8 @@ export interface ResultStats {
   tier?: 'club' | 'world';
   /** how far along the tour this show got */
   strip?: HTMLElement;
+  /** tour badges earned this show (and any mic they unlocked) */
+  badges?: { name: string; color: string; skin?: string }[];
 }
 
 export class ResultsScreen {
@@ -549,6 +551,15 @@ export class ResultsScreen {
       );
     }
     if (r.rumour) hooks.append(h('div', { class: 'rrumour' }, [h('span', { text: 'GROOVE RUMOUR' }), `“${r.rumour}”`]));
+    if (r.badges?.length) {
+      const row = h('div', { class: 'rbadges' }, [h('span', { class: 'rbadges-l', text: 'TOUR BADGES EARNED' })]);
+      for (const b of r.badges) {
+        const chip = h('span', { class: 'rbadge-chip', text: b.skin ? `★ ${b.name.toUpperCase()} · ${b.skin.toUpperCase()} MIC UNLOCKED` : `★ ${b.name.toUpperCase()}` });
+        chip.style.setProperty('--bc', b.color);
+        row.append(chip);
+      }
+      this.body.append(row);
+    }
     if (hooks.childElementCount) this.body.append(hooks);
     this.shareText = [
       `ENCORE ${r.daily ? '· Daily Setlist ' : ''}· seed ${r.seedCode}`,
@@ -695,7 +706,7 @@ export class MerchScreen {
           [
             h('img', { src: this.icons.mic(k), alt: '' }),
             h('div', { class: 'merch-name', text: k.name.toUpperCase() }),
-            h('div', { class: 'merch-desc', text: have ? (save.skin === id ? 'ON STAGE' : 'tap to use') : `badge: ${from ? BADGES[from].name : ''}` }),
+            h('div', { class: 'merch-desc', text: have ? (save.skin === id ? 'ON STAGE' : 'EQUIP') : `🔒 earn ${from ? BADGES[from].name : ''}` }),
           ],
         );
         rack.append(el);

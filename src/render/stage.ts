@@ -85,7 +85,8 @@ export class Stage {
     this.aberration = new ChromaticAberrationEffect({
       offset: new THREE.Vector2(0.0006, 0.0004),
       radialModulation: true,
-      modulationOffset: 0.25,
+      // the fringe lives at the edges: the middle of the screen (where you play) stays crisp
+      modulationOffset: 0.45,
     });
     this.noise = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: false });
     this.noise.blendMode.opacity.value = 0.09;
@@ -114,7 +115,7 @@ export class Stage {
   render(dt: number): void {
     this.aberrationKick *= Math.exp(-dt * 7);
     this.bloomKick *= Math.exp(-dt * 5);
-    const ab = 0.0005 + this.aberrationKick * 0.012;
+    const ab = 0.0005 + Math.min(1, this.aberrationKick) * 0.008;
     this.aberration.offset.set(ab, ab * 0.6);
     this.bloom.intensity = this.baseBloom + this.bloomKick;
     this.surge *= Math.exp(-dt * 0.9);

@@ -3505,3 +3505,71 @@ div.touch {
     top: 34%;
   }
 }
+
+.rbadges {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.rbadges-l {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.rbadge-chip {
+  --bc: #fff;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 11px;
+  color: #140c00;
+  background: radial-gradient(circle at 30% 30%, #fff, var(--bc) 70%);
+  box-shadow: 0 0 16px var(--bc);
+  animation: cardin 0.5s var(--ease-back) backwards 0.6s;
+}
+/* the tour route: pills joined by a line, festival season as a divider */
+.tour-gap {
+  padding: 1px 8px;
+  border-left: 1px solid rgba(255, 177, 61, 0.5);
+  border-right: 1px solid rgba(255, 177, 61, 0.5);
+}
+
+/* merch: anchored to the top so switching tabs never makes the panel jump; opaque backing */
+.merch.overlay {
+  justify-content: flex-start;
+  padding-top: max(24px, 5vh);
+}
+.merch .panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
+    rgba(14, 10, 24, 0.97);
+}
+.mic-skin.locked .merch-name {
+  color: var(--dim);
+}
+/* results: tighter vertical rhythm so everything (badges included) fits one screen */
+.results-panel {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+.results-panel .rstat {
+  padding: 10px 8px;
+}
+.results-panel .results-machine {
+  margin-top: 8px;
+}
+.results-panel .rhero {
+  margin-bottom: 12px;
+}
+.results-panel .rhooks {
+  margin-top: 0;
+}
+.results-panel .row {
+  margin-top: 12px;
+}

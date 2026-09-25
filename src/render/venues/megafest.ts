@@ -178,7 +178,9 @@ void main() {
   vec3 fin = uCols[2] * (spoke * (0.3 + comet * 0.6) + wave * 0.35 + step(0.975, hash21(pc + floor(uTime * 12.0))) * 0.35 + 0.012)
            + vec3(1.0, 0.9, 0.7) * spoke * cur * 0.4;
   L = mix(L, fin + L * 0.3, uFinale);
-  col += L * diode;
+  // the deck plays second fiddle to the fight: about half brightness until a DROP or the finale
+  float ledGain = mix(0.5, 1.0, max(uDrop, uFinale));
+  col += L * diode * ledGain;
   col += vec3(1.0, 0.85, 0.6) * seam * (kick * 0.3 + uFinale * 0.06 * beat);
 
   // ── the golden circle: twin brass rings set into the deck, studs chasing round ──
@@ -212,7 +214,7 @@ void main() {
   float star = smoothstep(0.12, 0.0, rw - starR);
   bs += uCols[2] * star * (0.2 + beat * 0.45 + uFinale * 0.9);
   bs += uCols[2] * smoothstep(0.14, 0.03, abs(rw - 7.85)) * (0.6 + beat * 0.8);
-  col = mix(col, bs, disc);
+  col = mix(col, mix(bs * 0.5, bs, max(uDrop, uFinale)), disc);
   // sixteen pads ring the B-stage: the playhead lit white, quarter notes gold
   float ta = aw * 16.0;
   float tick = floor(ta);

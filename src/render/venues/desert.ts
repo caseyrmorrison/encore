@@ -581,7 +581,8 @@ export class Desert implements Venue {
   readonly progression = 'desert' as const;
   readonly bounds: Bounds = { kind: 'circle', r: R };
   readonly palette: VenuePalette = {
-    rim: new THREE.Color(0xc04dff),
+    // hot pink edge: grey-brown playa needs a loud rim to read the horde
+    rim: new THREE.Color(0xff5ad8),
     floor: new THREE.Color(0x2ee6ff),
     accents: [PAL[0]!, PAL[1]!, PAL[2]!, PAL[3]!],
     fog: 0x120b24,
@@ -863,7 +864,8 @@ export class Desert implements Venue {
     const postGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.9, 5);
     postGeo.translate(0, 0.45, 0);
     const posts = new THREE.InstancedMesh(postGeo, M.darkChrome(), 16);
-    const capGeo = new THREE.SphereGeometry(0.17, 10, 8);
+    // small warm lamps (cyan orbs round the player read as pickups, and cyan is the LEAD track)
+    const capGeo = new THREE.SphereGeometry(0.11, 10, 8);
     const caps = new THREE.InstancedMesh(capGeo, this.lanternMat, 16);
     const steps = new Float32Array(16);
     const m4 = new THREE.Matrix4();
@@ -874,7 +876,7 @@ export class Desert implements Venue {
       const z = Math.sin(a) * SUNDIAL_R;
       posts.setMatrixAt(k, m4.makeTranslation(x, 0, z));
       caps.setMatrixAt(k, m4.makeTranslation(x, 0.98, z));
-      caps.setColorAt(k, c.setHex(k % 4 === 0 ? 0xbff6ff : PAL[1]!));
+      caps.setColorAt(k, c.setHex(k % 4 === 0 ? 0xfff1d0 : 0xffa050));
       steps[k] = k;
     }
     capGeo.setAttribute('aStep', new THREE.InstancedBufferAttribute(steps, 1));

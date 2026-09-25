@@ -378,6 +378,8 @@ export class Hud {
     el.style.setProperty('--bc', color);
     show(this.banner, false);
     this.bannerT = 0;
+    // one card at a time: a headliner's entrance replaces any card still on screen
+    for (const old of Array.from(this.el.querySelectorAll('.bosscard'))) old.remove();
     this.el.append(el);
     setTimeout(() => el.classList.add('out'), 2300);
     setTimeout(() => el.remove(), 2900);

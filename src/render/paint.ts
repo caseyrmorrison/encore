@@ -43,8 +43,10 @@ vec3 paintOver(vec3 col, vec2 w) {
     flash += uNoteAmp[i] * (1.0 - smoothstep(0.12, 0.45, distance(pc, nc)));
   }
   flash += uPaintSweep.y * smoothstep(3.5, 0.0, abs(w.x - uPaintSweep.x));
-  col = mix(col, col * 0.25, p.a * 0.75);
-  return col + p.rgb * p.a * (uPaintGlow * 0.8 + min(flash, 1.5) * 1.6);
+  // replace the floor under the paint with a deep version of the paint's own colour (on bright
+  // grass or dust a plain darken reads as mud), then let it glow
+  col = mix(col, pc * 0.12 + col * 0.15, p.a * 0.8);
+  return col + p.rgb * p.a * (uPaintGlow * 0.9 + min(flash, 1.5) * 1.6);
 }
 `;
 
