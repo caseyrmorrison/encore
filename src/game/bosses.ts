@@ -597,7 +597,8 @@ export class Cantor extends Boss {
       const arms = this.phase === 2 ? 4 : 3;
       this.radial(ctx, arms, 7.5, this.angle, 0.5);
       this.sing = 1;
-      if (this.phase === 2) this.radial(ctx, arms, 6, -this.angle * 1.3, 0.45);
+      // the counter-spiral fires every other volley: two interleaved spirals left no lanes
+      if (this.phase === 2 && step % 4 === 0) this.radial(ctx, arms, 6, -this.angle * 1.3, 0.45);
     }
     if (step === 0 && bar % 2 === 1) {
       // teleport somewhere near the player, but always inside the nave
