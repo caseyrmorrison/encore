@@ -181,11 +181,11 @@ export class SeqEditor {
     }
     const spareTotal = p.tracks.reduce((a, t) => a + t.spare, 0);
     if (this.mode.kind === 'fx') {
-      this.hint.textContent = `▶ Click a step to add ${this.mode.fx.toUpperCase()}`;
+      this.hint.textContent = `▶ Tap a step to add ${this.mode.fx.toUpperCase()}`;
     } else if (spareTotal > 0) {
       this.hint.textContent = `▶ ${spareTotal} note${spareTotal > 1 ? 's' : ''} to place — click empty steps`;
     } else {
-      this.hint.textContent = 'Click a lit step to lift it, then place it elsewhere';
+      this.hint.textContent = 'Tap a lit step to lift it, then place it elsewhere';
     }
     this.el.classList.toggle('placing', spareTotal > 0);
     this.renderGrooves(grooves);

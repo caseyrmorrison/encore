@@ -39,6 +39,7 @@ import {
   UNLOCK_COST,
 } from '../ui/screens';
 import { SeqEditor } from '../ui/seqEditor';
+import { TouchControls } from '../ui/touch';
 import { Band } from './band';
 import { Boss, Cantor, Feedback, TheHush, type BossCtx } from './bosses';
 import { Director } from './director';
@@ -102,6 +103,10 @@ export class Game {
   private readonly draftUi: DraftScreen;
   private readonly title: TitleScreen;
   private readonly pauseUi: PauseScreen;
+  private readonly touch: TouchControls;
+  /** playing with thumbs: on-screen stick + buttons, auto-aim, tap wording */
+  private touchMode = TouchControls.wanted();
+  private touchShown = false;
   private readonly settingsUi: SettingsScreen;
   private readonly howto: HowToScreen;
   private readonly results: ResultsScreen;
@@ -230,6 +235,24 @@ export class Game {
       howto: () => this.howto.setVisible(true),
       quit: () => this.endRun(false, true),
     });
+    this.touch = new TouchControls(uiRoot, this.input, () => this.pause());
+    document.documentElement.classList.toggle('touch', this.touchMode);
+    // hybrid devices switch control schemes the moment the player does
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType === 'touch' && !this.touchMode) this.setTouchMode(true);
+      },
+      { capture: true, passive: true },
+    );
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerType === 'mouse' && this.touchMode && e.movementX * e.movementX + e.movementY * e.movementY > 4)
+          this.setTouchMode(false);
+      },
+      { passive: true },
+    );
     this.settingsUi = new SettingsScreen(uiRoot, {
       change: (s) => this.applySettings(s),
       close: () => this.settingsUi.close(),
@@ -398,7 +421,12 @@ export class Game {
     if (!this.save.seenTutorial) {
       this.save.seenTutorial = true;
       writeSave(this.save);
-      this.schedule(3.2, () => this.hud.toast('WASD move · MOUSE aim · SPACE dash on the beat', '#fff'));
+      this.schedule(3.2, () =>
+        this.hud.toast(
+          this.touchMode ? 'Left thumb moves · tap DASH on the beat' : 'WASD move · MOUSE aim · SPACE dash on the beat',
+          '#fff',
+        ),
+      );
       this.schedule(7, () => this.hud.toast('Your instruments fire on their own — every lit step', '#ffe14d'));
     }
   }
@@ -693,6 +721,12 @@ export class Game {
       : 0;
     this.audio.spectrum(this.spectrum);
     this.handleGlobalKeys();
+    const wantTouch = this.touchMode && this.state === 'playing' && !this.autopilot;
+    if (wantTouch !== this.touchShown) {
+      this.touchShown = wantTouch;
+      this.touch.setActive(wantTouch);
+    }
+    if (wantTouch) this.touch.setDropReady(this.dropState === 'ready');
 
     // hit-stop & slow-mo only affect the simulation, never the music
     let dt = rawDt;
@@ -938,7 +972,7 @@ export class Game {
     // drop state
     if (this.dropState === 'idle' && run.hype >= 1) {
       this.dropState = 'ready';
-      this.hud.toast('HYPE FULL — PRESS Q TO DROP', '#ffb13d');
+      this.hud.toast(this.touchMode ? 'HYPE FULL — TAP DROP' : 'HYPE FULL — PRESS Q TO DROP', '#ffb13d');
       V.bell(this.audio, this.audio.now, 88, 0.6);
     }
     if (this.dropState === 'active') {
@@ -1038,7 +1072,7 @@ export class Game {
       p.aimX = this.input.gamepadAim.x;
       p.aimZ = this.input.gamepadAim.z;
       manual = true;
-    } else if (!this.save.settings.autoAim && !this.autopilot && this.input.mouseActive) {
+    } else if (!this.save.settings.autoAim && !this.autopilot && !this.touchMode && this.input.mouseActive) {
       const g = this.rig.groundFromScreen(this.input.mouseX, this.input.mouseY, this.aimV);
       if (g) {
         const dx = g.x - p.x;
@@ -2438,6 +2472,11 @@ export class Game {
         s.fn();
       }
     }
+  }
+
+  private setTouchMode(on: boolean): void {
+    this.touchMode = on;
+    document.documentElement.classList.toggle('touch', on);
   }
 
   private schedule(delay: number, fn: () => void): void {

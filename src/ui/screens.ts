@@ -42,7 +42,10 @@ export class TitleScreen {
     this.el = overlay('title', 'Main menu');
     this.dailyInfo = h('span', { class: 'btn-sub' });
     this.fans = h('span', { class: 'btn-sub' });
-    this.press = h('div', { class: 'press-start', text: 'CLICK OR PRESS ANY KEY' });
+    this.press = h('div', { class: 'press-start' }, [
+      h('span', { class: 'for-keys', text: 'CLICK OR PRESS ANY KEY' }),
+      h('span', { class: 'for-touch', text: 'TAP TO START' }),
+    ]);
     const dailyBtn = button('DAILY SETLIST', 'wide', a.daily);
     dailyBtn.append(this.dailyInfo);
     const merchBtn = button('MERCH TABLE', 'wide', a.merch);
@@ -309,20 +312,44 @@ export class HowToScreen {
   readonly el: HTMLElement;
   constructor(root: HTMLElement, close: () => void, icons: IconFactory) {
     this.el = overlay('howto', 'How to play');
-    const step = (n: string, title: string, body: string, img?: string): HTMLElement =>
+    const step = (n: string, title: string, body: string, img?: string, touchBody?: string): HTMLElement =>
       h('div', { class: 'how-step' }, [
         img ? h('img', { class: 'how-img', src: img, alt: '' }) : h('div', { class: 'how-num', text: n }),
-        h('div', {}, [h('div', { class: 'how-title', text: title }), h('div', { class: 'how-body', text: body })]),
+        h('div', {}, [
+          h('div', { class: 'how-title', text: title }),
+          h('div', { class: 'how-body' }, [
+            h('span', { class: touchBody ? 'for-keys' : '', text: body }),
+            touchBody ? h('span', { class: 'for-touch', text: touchBody }) : null,
+          ]),
+        ]),
       ]);
     this.el.append(
       h('div', { class: 'panel' }, [
         h('div', { class: 'panel-title big', text: 'HOW TO PLAY' }),
         h('div', { class: 'how-grid' }, [
-          step('1', 'Move & aim', 'WASD to move. Your mouse aims (or turn on auto-aim). You are the last live microphone.', icons.mic()),
+          step(
+            '1',
+            'Move & aim',
+            'WASD to move. Your mouse aims (or turn on auto-aim). You are the last live microphone.',
+            icons.mic(),
+            'Drag anywhere on the left to move. Your band aims for you. You are the last live microphone.',
+          ),
           step('2', 'Your weapons are a drum machine', 'Each instrument is a track on a 16-step grid. Every lit step fires that weapon when the playhead passes it. More notes = more attacks.', icons.machine()),
           step('3', 'Compose to break the game', 'Tracks on the same step form CHORDS (+damage). Real rhythms unlock secret GROOVES. Accent, Ratchet and Echo multiply steps.', icons.fx('ratchet')),
-          step('4', 'Dash on the beat', 'SPACE dashes. Dash as the ring lands on the beat for a PERFECT: shockwave, longer invulnerability, and hype.', icons.pedal('metronome')),
-          step('5', 'Drop it', 'Fill HYPE by silencing The Hush, then press Q. The room builds to the next downbeat — then everything doubles.', icons.pedal('hypeman')),
+          step(
+            '4',
+            'Dash on the beat',
+            'SPACE dashes. Dash as the ring lands on the beat for a PERFECT: shockwave, longer invulnerability, and hype.',
+            icons.pedal('metronome'),
+            'Tap DASH. Dash as the ring lands on the beat for a PERFECT: shockwave, longer invulnerability, and hype.',
+          ),
+          step(
+            '5',
+            'Drop it',
+            'Fill HYPE by silencing The Hush, then press Q. The room builds to the next downbeat — then everything doubles.',
+            icons.pedal('hypeman'),
+            'Fill HYPE by silencing The Hush, then tap DROP. The room builds to the next downbeat — then everything doubles.',
+          ),
           step('6', 'Headline three venues', 'Survive the set, beat the headliner, spend tips backstage. Win, and the crowd demands an ENCORE — endless and faster.', icons.goldRecord()),
         ]),
         h('div', { class: 'how-keys' }, [

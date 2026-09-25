@@ -140,7 +140,15 @@ export class Hud {
     this.set('drop', dropState, () => {
       this.hypeWrap.dataset.state = dropState;
       this.hypeLabel.textContent =
-        dropState === 'ready' ? 'Q  DROP!' : dropState === 'queued' ? 'BUILDING…' : dropState === 'active' ? 'DROPPING' : '';
+        dropState === 'ready'
+          ? document.documentElement.classList.contains('touch')
+            ? 'DROP READY'
+            : 'Q  DROP!'
+          : dropState === 'queued'
+            ? 'BUILDING…'
+            : dropState === 'active'
+              ? 'DROPPING'
+              : '';
     });
     this.set('dash', dashCharges * 10 + dashMax, () =>
       this.dash.forEach((d, i) => {

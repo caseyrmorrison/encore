@@ -1147,6 +1147,7 @@ body.overlay-open .hud .streak {
   color: var(--muted);
 }
 .card-kicker {
+  margin-top: 22px;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.22em;
@@ -2452,4 +2453,171 @@ kbd {
 .mini-seq.many .mini-label {
   font-size: 9px;
   line-height: 8px;
+}
+
+/* ───────────── touch: two thumbs are enough ───────────── */
+.for-touch {
+  display: none;
+}
+.touch .for-touch {
+  display: inline;
+}
+.touch .for-keys,
+.touch .hotkey,
+.touch .keyhints,
+.touch .how-keys {
+  display: none;
+}
+.touch #stage {
+  touch-action: none;
+}
+.touch {
+  -webkit-tap-highlight-color: transparent;
+}
+.touch.hidden {
+  display: none;
+}
+div.touch {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  touch-action: none;
+}
+.tzone {
+  position: absolute;
+  left: 0;
+  top: 90px;
+  bottom: 0;
+  width: 58%;
+  pointer-events: auto;
+  touch-action: none;
+}
+.tstick {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 124px;
+  height: 124px;
+  margin: -62px 0 0 -62px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  background: radial-gradient(circle, rgba(255, 45, 120, 0.12), rgba(10, 6, 20, 0.35) 70%);
+  box-shadow: 0 0 30px rgba(255, 45, 120, 0.25);
+  pointer-events: none;
+}
+.tknob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 40% 35%, #ff8ab8, #ff2d78 60%, #a8104c);
+  box-shadow:
+    0 0 22px rgba(255, 45, 120, 0.8),
+    0 4px 0 rgba(0, 0, 0, 0.4);
+}
+.tbtn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  font-family: var(--display);
+  color: #fff;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tbtn.hit {
+  animation: tbtnhit 0.25s var(--ease-out);
+}
+@keyframes tbtnhit {
+  0% {
+    transform: scale(0.86);
+    filter: brightness(1.8);
+  }
+}
+.tdash {
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(26px, env(safe-area-inset-bottom));
+  width: 104px;
+  height: 104px;
+  font-size: 16px;
+  background: radial-gradient(circle at 40% 35%, #7ff4ff, #1fb8d6 60%, #0b5a70);
+  box-shadow: 0 0 28px rgba(46, 230, 255, 0.55);
+}
+.tdrop {
+  right: max(140px, calc(env(safe-area-inset-right) + 118px));
+  bottom: max(40px, env(safe-area-inset-bottom));
+  width: 76px;
+  height: 76px;
+  font-size: 13px;
+  background: rgba(30, 22, 44, 0.75);
+  color: var(--dim);
+}
+.tdrop.ready {
+  color: #1a1000;
+  background: radial-gradient(circle at 40% 35%, #fff1b0, #ffc53d 60%, #b8780a);
+  box-shadow: 0 0 34px rgba(255, 197, 61, 0.9);
+  animation: dropready 0.5s ease-in-out infinite alternate;
+}
+@keyframes dropready {
+  to {
+    transform: scale(1.08);
+  }
+}
+.tpause {
+  right: max(20px, env(safe-area-inset-right));
+  top: 122px;
+  width: 44px;
+  height: 44px;
+  font-size: 13px;
+  background: rgba(20, 14, 30, 0.7);
+}
+/* phones: the HUD machine would sit under the thumbs; tuck it smaller and higher */
+.touch .hud-bottom {
+  transform: translateX(-50%) scale(0.72);
+  transform-origin: bottom center;
+}
+
+/* short screens (phones in landscape): the DOM chrome scales down, the 3D stage doesn't */
+@media (max-height: 560px) {
+  .overlay {
+    zoom: 0.66;
+    justify-content: safe center;
+    padding: 12px;
+  }
+  .hud-tl,
+  .hud-tc,
+  .hud-tr,
+  .hud-bottom,
+  .banner,
+  .toasts,
+  .streak,
+  .stamp,
+  .title-menu,
+  .press-start,
+  .title-foot {
+    zoom: 0.62;
+  }
+  .tdash {
+    width: 88px;
+    height: 88px;
+  }
+  .tdrop {
+    width: 64px;
+    height: 64px;
+    right: max(118px, calc(env(safe-area-inset-right) + 100px));
+  }
+  .tpause {
+    top: 84px;
+  }
+}
+/* a finger needs a real target: slightly roomier cards and steps */
+.touch .seq-cell {
+  min-height: 30px;
 }

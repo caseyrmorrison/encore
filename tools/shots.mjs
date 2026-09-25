@@ -20,7 +20,12 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
 });
-const page = await browser.newPage({ viewport: { width: w, height: hgt }, deviceScaleFactor: 1 });
+const mobile = args.includes('--mobile');
+const page = await browser.newPage(
+  mobile
+    ? { viewport: { width: w, height: hgt }, deviceScaleFactor: 2, hasTouch: true, isMobile: true }
+    : { viewport: { width: w, height: hgt }, deviceScaleFactor: 1 },
+);
 const logs = [];
 page.on('console', (m) => {
   if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`);
@@ -188,6 +193,43 @@ const S = {
     const log = await E(() => window.__encore.botLog());
     console.log('log', JSON.stringify(log.filter((_, i) => i % 10 === 0)));
     console.log('fps', await fps());
+  },
+  /** Phone play: run with --mobile --w=844 --h=390. Drives the touch stick with synthetic pointer events. */
+  async touch() {
+    await sleep(600);
+    await shot('touch-title');
+    await page.touchscreen.tap(w / 2, hgt / 2);
+    await sleep(1800);
+    await shot('touch-menu');
+    await E(() => window.__encore.game.startRun('standard'));
+    await sleep(2500);
+    const finger = (type, x, y) =>
+      E(
+        ([type, x, y]) => {
+          const target = type === 'pointerdown' ? document.querySelector('.tzone') : window;
+          target.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', pointerId: 7, clientX: x, clientY: y, bubbles: true }));
+        },
+        [type, x, y],
+      );
+    await finger('pointerdown', 150, hgt - 110);
+    for (let k = 0; k < 20; k++) {
+      await finger('pointermove', 150 + Math.cos(k * 0.4) * 50, hgt - 110 + Math.sin(k * 0.4) * 50);
+      await sleep(120);
+    }
+    await shot('touch-play');
+    const moved = await E(() => {
+      const p = window.__encore.game.player;
+      return { x: +p.x.toFixed(2), z: +p.z.toFixed(2) };
+    });
+    console.log('player after stick', JSON.stringify(moved));
+    await finger('pointerup', 150, hgt - 110);
+    await page.touchscreen.tap(w - 70, hgt - 70);
+    await E(() => (window.__encore.game.run.hype = 1));
+    await sleep(900);
+    await shot('touch-drop-ready');
+    await E(() => window.__encore.levelUp());
+    await sleep(1500);
+    await shot('touch-draft');
   },
   async title() {
     await sleep(800);

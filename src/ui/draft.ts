@@ -49,7 +49,10 @@ export class DraftScreen {
       on: { click: () => this.finish() },
     });
     this.editorSlot = h('div', { class: 'editor-slot' });
-    this.hint = h('div', { class: 'draft-hint' }, ['PRESS ', h('b', { text: '1' }), h('b', { text: '2' }), h('b', { text: '3' }), ' OR CLICK A CARD']);
+    this.hint = h('div', { class: 'draft-hint' }, [
+      h('span', { class: 'for-keys' }, ['PRESS ', h('b', { text: '1' }), h('b', { text: '2' }), h('b', { text: '3' }), ' OR CLICK A CARD']),
+      h('span', { class: 'for-touch', text: 'TAP A CARD' }),
+    ]);
     this.el = h('div', { class: 'overlay draft hidden', role: 'dialog', aria: { modal: 'true', label: 'Level up' } }, [
       h('div', { class: 'draft-head' }, [this.title, this.sub]),
       this.cards,
@@ -121,7 +124,8 @@ export class DraftScreen {
       return card;
     });
     this.cards.append(...this.cardEls);
-    this.rerollBtn.textContent = `↻ REROLL (${o.rerolls})  [R]`;
+    this.rerollBtn.textContent = `↻ REROLL (${o.rerolls})`;
+    this.rerollBtn.append(h('span', { class: 'hotkey', text: 'R' }));
     this.rerollBtn.disabled = o.rerolls <= 0 || this.picked;
   }
 

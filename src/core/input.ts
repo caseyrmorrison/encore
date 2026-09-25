@@ -33,6 +33,10 @@ export class Input {
   private padPrev: boolean[] = [];
   /** performance.now() timestamp of the most recent dash press — used for beat judging. */
   dashPressedAt = 0;
+  /** Movement from on-screen controls (touch stick), screen space like the keyboard. */
+  readonly external = { x: 0, y: 0 };
+  /** Last pointer type seen: lets hybrid devices flip between touch and mouse controls. */
+  lastPointer: 'mouse' | 'touch' | 'pen' | '' = '';
 
   constructor(target: HTMLElement) {
     window.addEventListener('keydown', this.onKeyDown);
@@ -61,6 +65,9 @@ export class Input {
   };
 
   private onMove = (e: PointerEvent): void => {
+    // fingers steer through the touch stick, never the aim
+    if (e.pointerType === 'touch') return;
+    this.lastPointer = e.pointerType as 'mouse' | 'pen';
     this.mouseX = e.clientX;
     this.mouseY = e.clientY;
     this.mouseActive = true;
@@ -68,6 +75,8 @@ export class Input {
   };
 
   private onPointerDown = (e: PointerEvent): void => {
+    this.lastPointer = e.pointerType as 'mouse' | 'touch' | 'pen';
+    if (e.pointerType === 'touch') return;
     this.mouseX = e.clientX;
     this.mouseY = e.clientY;
     if (e.button === 0) this.mouseDown = true;
@@ -107,6 +116,8 @@ export class Input {
       x += pad.lx;
       y += pad.ly;
     }
+    x += this.external.x;
+    y += this.external.y;
     const l = Math.hypot(x, y);
     if (l > 1) {
       x /= l;

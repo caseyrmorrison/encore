@@ -65,6 +65,7 @@ export default tseslint.config(
         setTimeout: 'readonly',
         performance: 'readonly',
         requestAnimationFrame: 'readonly',
+        PointerEvent: 'readonly',
       },
     },
   },
