@@ -188,7 +188,8 @@ export class EnemyManager {
     }
     if (!e) return null;
     const d = ENEMY_DEFS[kind];
-    const eliteMult = elite ? 5 : 1;
+    // bouncers are always elite; the full ×5 made the first one a 2,300 HP wall at level 8
+    const eliteMult = elite ? (kind === 'bouncer' ? 2.5 : 5) : 1;
     e.id = this.nextId++;
     e.alive = true;
     e.kind = kind;
@@ -202,7 +203,7 @@ export class EnemyManager {
     e.speed = d.speed * (0.9 + Math.random() * 0.2) * (elite ? 0.9 : 1);
     e.scale = d.scale * (elite ? 1.45 : 1) * (0.94 + Math.random() * 0.12);
     e.radius = d.radius * (e.scale / d.scale) * d.scale;
-    e.dmg = d.dmg * (elite ? 1.5 : 1);
+    e.dmg = d.dmg * (elite ? (kind === 'bouncer' ? 1.2 : 1.5) : 1);
     e.xp = d.xp * (elite ? 6 : 1);
     e.mass = d.mass * (elite ? 3 : 1);
     e.elite = elite || kind === 'bouncer';

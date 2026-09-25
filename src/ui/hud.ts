@@ -338,7 +338,9 @@ export class Hud {
     setTimeout(() => c.remove(), 1400);
   }
 
-  flashPerfect(): void {
+  flashPerfect(chain = 1): void {
+    this.perfect.textContent = chain > 1 ? `PERFECT ×${chain}` : 'PERFECT';
+    this.perfect.classList.toggle('chain', chain > 1);
     show(this.perfect, true);
     this.perfect.classList.remove('pop');
     void this.perfect.offsetWidth;

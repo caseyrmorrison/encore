@@ -3014,3 +3014,10 @@ div.touch {
     min-height: 44px;
   }
 }
+
+.perfect.chain {
+  color: #fff1b0;
+  text-shadow:
+    0 0 18px #ffc53d,
+    0 0 40px #ff9a2e;
+}

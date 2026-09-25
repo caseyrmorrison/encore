@@ -135,15 +135,16 @@ export class DamageNumbers {
     if (this.nums.length > 320) this.nums.shift();
     const text = prefix + formatInt(value);
     this.nums.push({
-      x: x + (Math.random() - 0.5) * 0.6,
+      // fan out so neighbouring hits don't stack into one unreadable blob
+      x: x + (Math.random() - 0.5) * 1.4,
       y,
-      z: z + (Math.random() - 0.5) * 0.6,
+      z: z + (Math.random() - 0.5) * 0.8,
       text,
       color: typeof color === 'number' ? new THREE.Color(color) : color.clone(),
       size,
       life: 0.62 + size * 0.2,
       max: 0.62 + size * 0.2,
-      vx: (Math.random() - 0.5) * 1.5,
+      vx: (Math.random() - 0.5) * 4,
       vy: 3.2 + size * 1.2,
     });
   }

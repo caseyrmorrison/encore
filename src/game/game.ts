@@ -155,6 +155,8 @@ export class Game {
   private last = performance.now();
   private hitStop = 0;
   private slowMo = 0;
+  private perfectChain = 0;
+  private lastPerfectAt = -99;
   private streak = 0;
   private streakT = 0;
   private pickupChain = 0;
@@ -1071,6 +1073,22 @@ export class Game {
       fx += ((-pr.vz / l) * side * 6) / Math.max(1, d2);
       fz += ((pr.vx / l) * side * 6) / Math.max(1, d2);
     }
+    // a bouncer winding up or charging: get off its line (a human reads the red telegraph)
+    let dodge = false;
+    for (const e of this.enemies.list) {
+      if (!e.alive || e.kind !== 'bouncer' || e.mode === 0) continue;
+      const rx = p.x - e.x;
+      const rz = p.z - e.z;
+      const along = rx * e.tx + rz * e.tz;
+      const perp = rx * -e.tz + rz * e.tx;
+      if (along > -1 && along < 12 && Math.abs(perp) < 3) {
+        const side = Math.sign(perp) || 1;
+        fx += -e.tz * side * 3;
+        fz += e.tx * side * 3;
+        if (e.mode === 2 && along < 5) dodge = true;
+      }
+    }
+    if (dodge && p.charges > 0) this.input.latch('dash');
     // drift toward the centre and toward pickups so the bot doesn't hug walls
     fx += -p.x * 0.004;
     fz += -p.z * 0.004;
@@ -1175,14 +1193,21 @@ export class Game {
     const p = this.player;
     const run = this.run!;
     run.perfects++;
+    // back-to-back perfects chain: each one rings a step higher
+    this.perfectChain = this.time - this.lastPerfectAt < 3.2 ? this.perfectChain + 1 : 1;
+    this.lastPerfectAt = this.time;
+    const chain = this.perfectChain;
     p.invuln = Math.max(p.invuln, 0.5);
     if (run.pedals.metronome > 0 && p.charges < p.maxCharges) p.charges++;
-    this.addHype(0.08);
-    this.hud.flashPerfect();
+    this.addHype(0.08 + Math.min(4, chain - 1) * 0.02);
+    this.hud.flashPerfect(chain);
     const core = new THREE.Color(this.venue.palette.core);
     const t = this.audio.now;
-    V.bell(this.audio, t, 81, 0.8, undefined, 0.6);
-    V.bell(this.audio, t + 0.04, 88, 0.6, undefined, 0.6);
+    const lift = Math.min(12, (chain - 1) * 2);
+    V.bell(this.audio, t, 81 + lift, 0.8, undefined, 0.6);
+    V.bell(this.audio, t + 0.04, 88 + lift, 0.6, undefined, 0.6);
+    // gold footprints: every on-beat dash leaves its mark on the floor
+    this.paint.splat(p.x, p.z, 1.4 + Math.min(1.5, chain * 0.2), 0xffd36b, 1.3);
     V.whoosh(this.audio, t, 1, true, 0.2);
     // shockwave at the launch point
     const dmg = 22 * run.stats.perfectDmg * (1 + run.level * 0.12) * run.stats.dmgMult;
@@ -1610,8 +1635,9 @@ export class Game {
         this.ground.add(GroundKind.Ring, e.x, e.z, DAMPER_RADIUS, DAMPER_RADIUS - 0.6, 0.9, 0x7a5cff, { thickness: 0.05, alpha: 0.5 });
       if ((e.x - p.x) ** 2 + (e.z - p.z) ** 2 < DAMPER_RADIUS * DAMPER_RADIUS) inside = true;
     }
-    const cantorSilence = this.boss instanceof Cantor && this.boss.inSilence(p.x, p.z);
-    const hush = this.boss instanceof TheHush && this.boss.silent;
+    const cantorSilence = this.boss instanceof Cantor && !this.boss.dead && this.boss.inSilence(p.x, p.z);
+    // a fallen Hush can't hold the room silent (it may die mid-silence)
+    const hush = this.boss instanceof TheHush && this.boss.silent && !this.boss.dead;
     this.silenced = inside || cantorSilence || hush;
     this.music.hushed = this.silenced;
     this.hud.setMuffled(inside || cantorSilence);
@@ -2559,7 +2585,7 @@ export class Game {
     this.rig.update(rawDt, this.save.settings.shake);
     this.stage.baseBloom = 1.05 + (drop ? 0.5 : 0) + kick * 0.15;
     // the Hush's silence drains the colour out of the room; music (a DROP) paints it back
-    const drained = this.boss instanceof TheHush && this.boss.silent;
+    const drained = this.boss instanceof TheHush && this.boss.silent && !this.boss.dead;
     this.stage.baseSaturation = damp(this.stage.baseSaturation, drained ? -0.62 : 0, drained ? 1.2 : 4, rawDt);
     // the paint breathes with the kick and blazes during a drop
     PAINT_UNIFORMS.uPaintGlow.value = 0.5 + kick * 0.45 + (drop ? 0.6 : 0) - this.buildT * 0.4;
