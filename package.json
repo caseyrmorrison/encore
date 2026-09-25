@@ -12,7 +12,9 @@
     "test": "vitest run",
     "lint": "eslint src tests tools",
     "typecheck": "tsc --noEmit",
-    "shots": "node tools/shots.mjs"
+    "shots": "node tools/shots.mjs",
+    "bot:build": "NODE_ENV=development vite build --mode development --outDir .bot-build",
+    "bot:serve": "vite preview --outDir .bot-build --port 5312 --strictPort"
   },
   "dependencies": {
     "@fontsource/bungee": "^5.3.0",

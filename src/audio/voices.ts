@@ -87,7 +87,7 @@ export function snare(e: AudioEngine, t: number, vel = 1): void {
 const HAT_RATIOS = [2, 3, 4.16, 5.43, 6.79, 8.21];
 export function hat(e: AudioEngine, t: number, vel = 1, open = false): void {
   const dec = open ? 0.32 : 0.045;
-  const g = gainEnv(e, e.bus.drums, t, 0.26 * vel, 0.001, dec);
+  const g = gainEnv(e, e.bus.drums, t, 0.37 * vel, 0.001, dec);
   const hp = filter(e, 'highpass', 7200, 0.8, g);
   const bp = filter(e, 'bandpass', 10500, 0.9, hp);
   for (const r of HAT_RATIOS) osc(e, 'square', 40 * r * 1.6, t, dec + 0.02, bp);
@@ -101,10 +101,10 @@ export function clap(e: AudioEngine, t: number, vel = 1): void {
   // three slapback transients then a tail — the classic 808 clap
   for (let i = 0; i < 3; i++) {
     const s = t + i * 0.011;
-    g.gain.setValueAtTime(0.75 * vel, s);
-    g.gain.exponentialRampToValueAtTime(0.08, s + 0.009);
+    g.gain.setValueAtTime(2.1 * vel, s);
+    g.gain.exponentialRampToValueAtTime(0.2, s + 0.009);
   }
-  g.gain.setValueAtTime(0.5 * vel, t + 0.034);
+  g.gain.setValueAtTime(1.4 * vel, t + 0.034);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
   g.connect(e.bus.drums);
   const bp = filter(e, 'bandpass', 1150, 1.3, g);
@@ -146,7 +146,7 @@ export function crash(e: AudioEngine, t: number, vel = 1): void {
 }
 
 export function scratch(e: AudioEngine, t: number, vel = 1, dur = 0.16): void {
-  const g = gainEnv(e, e.bus.drums, t, 0.55 * vel, 0.004, dur);
+  const g = gainEnv(e, e.bus.drums, t, 1.5 * vel, 0.004, dur);
   const bp = filter(e, 'bandpass', 900, 3.2, g);
   const src = noiseBurst(e, t, dur + 0.05, bp);
   src.playbackRate.setValueAtTime(0.5, t);
@@ -181,8 +181,8 @@ export function bass(e: AudioEngine, t: number, midi: number, dur: number, vel =
   const f = midiToFreq(midi);
   const out = e.ctx.createGain();
   out.gain.setValueAtTime(0.0001, t);
-  out.gain.exponentialRampToValueAtTime(0.5 * vel, t + 0.006);
-  out.gain.setTargetAtTime(0.34 * vel, t + 0.03, 0.08);
+  out.gain.exponentialRampToValueAtTime(0.27 * vel, t + 0.006);
+  out.gain.setTargetAtTime(0.18 * vel, t + 0.03, 0.08);
   out.gain.setTargetAtTime(0.0001, t + dur, 0.04);
   out.connect(e.bus.music);
   const shaper = e.ctx.createWaveShaper();
@@ -217,7 +217,7 @@ export function bass(e: AudioEngine, t: number, midi: number, dur: number, vel =
 
 export function lead(e: AudioEngine, t: number, midi: number, vel = 1, dur = 0.18): void {
   const f = midiToFreq(midi);
-  const g = gainEnv(e, e.bus.music, t, 0.2 * vel, 0.004, dur + 0.12);
+  const g = gainEnv(e, e.bus.music, t, 0.32 * vel, 0.004, dur + 0.12);
   const lp = filter(e, 'lowpass', 5200, 3, g);
   lp.frequency.setValueAtTime(5200, t);
   lp.frequency.exponentialRampToValueAtTime(900, t + dur + 0.1);
@@ -235,7 +235,7 @@ export function lead(e: AudioEngine, t: number, midi: number, vel = 1, dur = 0.1
 export function pad(e: AudioEngine, t: number, midis: number[], dur: number, vel = 1, bright = 0.5): void {
   const g = e.ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(0.1 * vel, t + Math.min(0.35, dur * 0.4));
+  g.gain.linearRampToValueAtTime(0.065 * vel, t + Math.min(0.35, dur * 0.4));
   g.gain.setTargetAtTime(0.0001, t + dur, 0.35);
   g.connect(e.bus.music);
   const lp = filter(e, 'lowpass', 700 + bright * 2400, 0.7, g);
@@ -251,7 +251,7 @@ export function pad(e: AudioEngine, t: number, midis: number[], dur: number, vel
 export function organ(e: AudioEngine, t: number, midis: number[], dur: number, vel = 1): void {
   const g = e.ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(0.085 * vel, t + 0.03);
+  g.gain.linearRampToValueAtTime(0.06 * vel, t + 0.03);
   g.gain.setTargetAtTime(0.0001, t + dur, 0.25);
   g.connect(e.bus.music);
   const drawbars = [
@@ -318,7 +318,8 @@ export function bell(e: AudioEngine, t: number, midi: number, vel = 1, dest?: Au
   const g = gainEnv(e, dest ?? e.bus.sfx, t, 0.16 * vel, 0.002, decay);
   const car = osc(e, 'sine', f, t, decay + 0.05, g);
   const mod = e.ctx.createOscillator();
-  mod.frequency.value = f * 3.5;
+  // keep the modulator well under Nyquist; very high bells get a gentler ratio
+  mod.frequency.value = Math.min(f * 3.5, 16000);
   const idx = e.ctx.createGain();
   idx.gain.setValueAtTime(f * 1.6, t);
   idx.gain.exponentialRampToValueAtTime(1, t + decay * 0.7);
@@ -391,14 +392,14 @@ export function hurt(e: AudioEngine, t: number): void {
 export function shh(e: AudioEngine, t: number, vel = 1): void {
   const g = e.ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.09 * vel, t + 0.05);
+  g.gain.exponentialRampToValueAtTime(0.14 * vel, t + 0.05);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
   g.connect(e.bus.sfx);
   noiseBurst(e, t, 0.14, filter(e, 'bandpass', 5200, 1.6, g));
 }
 
 export function tick(e: AudioEngine, t: number, vel = 1): void {
-  const g = gainEnv(e, e.bus.sfx, t, 0.08 * vel, 0.001, 0.025);
+  const g = gainEnv(e, e.bus.sfx, t, 0.3 * vel, 0.001, 0.025);
   noiseBurst(e, t, 0.04, filter(e, 'bandpass', 2600 + Math.random() * 1200, 2, g));
 }
 
@@ -422,7 +423,7 @@ export function uiError(e: AudioEngine, t: number): void {
 export function crowdCheer(e: AudioEngine, t: number, size = 1, dur = 2.2): void {
   const g = e.ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.42 * size, t + 0.25);
+  g.gain.exponentialRampToValueAtTime(1.05 * size, t + 0.25);
   g.gain.setTargetAtTime(0.0001, t + dur * 0.45, dur * 0.25);
   g.connect(e.bus.crowd);
   // many throats: detuned formant bands with fast random amplitude flutter

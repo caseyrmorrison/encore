@@ -142,6 +142,9 @@ export class Game {
   private pickupChain = 0;
   private pickupChainT = 0;
   private dropState: 'idle' | 'ready' | 'queued' | 'active' = 'idle';
+  private buildStart = 0;
+  private buildEnd = 0;
+  private buildT = 0;
   private readonly spectrum = new Float32Array(16);
   private readonly scheduled: { t: number; fn: () => void }[] = [];
   private currentStep = 0;
@@ -158,6 +161,8 @@ export class Game {
   private titleCam = 0;
   private readonly tmp = { x: 0, z: 0 };
   private readonly aimV = new THREE.Vector3();
+  private readonly camDir = new THREE.Vector3();
+  private readonly scr = { x: 0, y: 0 };
   private readonly weaponCtx: WeaponCtx;
   private readonly bossCtx: BossCtx;
   private energy = 0;
@@ -605,6 +610,7 @@ export class Game {
         this.updateOutro(rawDt, beatPhase);
         break;
       default:
+        if (this.autopilot && this.state === 'backstage') this.leaveBackstage();
         // draft / paused / backstage / results: the band plays on, the world holds its breath
         this.music.drain(audible, null);
         this.transport.drain(audible, (ev) => this.venue.onStep(ev.step, ev.bar));
@@ -671,6 +677,7 @@ export class Game {
       playerX: 0,
       playerZ: 2,
       bossActive: false,
+      build: 0,
     });
     this.setVenueBar();
     if (Math.random() < 0.08) {
@@ -726,6 +733,17 @@ export class Game {
       if (this.bossDownT <= 0) this.afterBoss();
     }
 
+    if (this.autopilot && Math.floor(run.time) !== Math.floor(run.time - dt)) {
+      this.autoLog.push({
+        t: Math.round(run.time),
+        lvl: run.level,
+        hp: Math.round(run.hp),
+        kills: run.kills,
+        alive: this.enemies.aliveCount,
+        venue: run.venueIndex,
+        dmg: Math.round(run.damage),
+      });
+    }
     // set progression → headliner
     run.setTime += dt;
     if (this.director && !this.director.bossTriggered && run.setTime >= this.director.length) {
@@ -746,7 +764,7 @@ export class Game {
         shoot: (e, dx, dz) => this.enemyShoot(e.x, e.z, dx * 11, dz * 11, 0.5),
         telegraph: (x, z, r, d, c) => this.ground.add(GroundKind.Telegraph, x, z, r, r, d, c, { fixed: true, alpha: 0.8 }),
       },
-      1 + run.loop * 0.08,
+      (1 + run.loop * 0.08) * (1 - this.buildT * 0.7),
     );
     this.contactDamage();
     this.damperCheck(dt);
@@ -791,6 +809,15 @@ export class Game {
     this.pickupChainT -= dt;
     if (this.pickupChainT <= 0) this.pickupChain = 0;
 
+    // build-up: filter sweep opens, tunnel vision closes in, the room holds its breath
+    if (this.dropState === 'queued') {
+      this.buildT = clamp((audible - this.buildStart) / Math.max(0.1, this.buildEnd - this.buildStart), 0, 1);
+      this.muffleTarget = 0.72 * (1 - this.buildT) * (audible >= this.buildStart ? 1 : 0);
+    } else if (this.buildT > 0) {
+      this.buildT = Math.max(0, this.buildT - rawDt * 4);
+      if (this.state === 'playing') this.muffleTarget = 0;
+    }
+    this.stage.buildUp = this.buildT;
     // drop state
     if (this.dropState === 'idle' && run.hype >= 1) {
       this.dropState = 'ready';
@@ -828,13 +855,62 @@ export class Game {
       this.dropState,
     );
     prof.end('hud');
+    if (this.rig.toScreen(p.x, 1, p.z, this.scr)) this.hud.setBottomFade(this.scr.y > window.innerHeight * 0.7);
     this.processAnnouncements(rawDt);
+  }
+
+  /** Dev-only bot: kites away from threats so balance can be measured headlessly. */
+  private autopilot = false;
+  private autoLog: { t: number; lvl: number; hp: number; kills: number; alive: number; venue: number; dmg: number }[] = [];
+
+  private botMove(): { x: number; y: number } {
+    const p = this.player;
+    let fx = 0;
+    let fz = 0;
+    for (const e of this.enemies.list) {
+      if (!e.alive) continue;
+      const dx = p.x - e.x;
+      const dz = p.z - e.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 144) continue;
+      const w = (e.scripted ? 6 : 1) / Math.max(1, d2);
+      fx += dx * w;
+      fz += dz * w;
+    }
+    for (const pr of this.projectiles.list) {
+      if (!pr.alive || pr.kind !== 'enemy') continue;
+      const dx = p.x - pr.x;
+      const dz = p.z - pr.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 25) continue;
+      fx += (dx / Math.max(1, d2)) * 2;
+      fz += (dz / Math.max(1, d2)) * 2;
+    }
+    // drift toward the centre and toward pickups so the bot doesn't hug walls
+    fx += -p.x * 0.004;
+    fz += -p.z * 0.004;
+    const pk = this.pickups.list.find((q) => q.alive && Math.hypot(q.x - p.x, q.z - p.z) < 10);
+    if (pk) {
+      fx += (pk.x - p.x) * 0.01;
+      fz += (pk.z - p.z) * 0.01;
+    }
+    // circle-strafe component
+    const l = Math.hypot(fx, fz);
+    if (l < 1e-4) return { x: Math.sin(this.time * 0.7), y: Math.cos(this.time * 0.5) };
+    const tx = -fz / l;
+    const tz = fx / l;
+    const x = fx / l + tx * 0.6;
+    const y = fz / l + tz * 0.6;
+    const m = Math.hypot(x, y) || 1;
+    if (this.enemies.nearest(p.x, p.z, 2.4) && p.charges > 0) this.input.latch('dash');
+    if (this.dropState === 'ready') this.input.latch('drop');
+    return { x: x / m, y: y / m };
   }
 
   private updatePlayer(dt: number, audible: number): void {
     const p = this.player;
     const run = this.run!;
-    const mv = this.input.move();
+    const mv = this.autopilot ? this.botMove() : this.input.move();
     const speed = run.stats.moveSpeed;
     // aim
     let manual = false;
@@ -842,7 +918,7 @@ export class Game {
       p.aimX = this.input.gamepadAim.x;
       p.aimZ = this.input.gamepadAim.z;
       manual = true;
-    } else if (!this.save.settings.autoAim && this.input.mouseActive) {
+    } else if (!this.save.settings.autoAim && !this.autopilot && this.input.mouseActive) {
       const g = this.rig.groundFromScreen(this.input.mouseX, this.input.mouseY, this.aimV);
       if (g) {
         const dx = g.x - p.x;
@@ -970,6 +1046,8 @@ export class Game {
     this.music.dropAtBar = dropBar;
     this.music.dropUntil = dropBar + run.stats.dropBars - 1;
     V.riser(this.audio, riserStart, riserEnd - riserStart);
+    this.buildStart = riserStart;
+    this.buildEnd = riserEnd;
     this.dropState = 'queued';
     this.hud.announce('BUILD IT UP', 'drop on the downbeat', '#ffb13d', 1.4);
   }
@@ -978,6 +1056,13 @@ export class Game {
     this.venue.onStep(ev.step, ev.bar);
     const run = this.run!;
     if (ev.step === 0 && ev.bar === this.music.dropAtBar && this.dropState === 'queued') this.detonateDrop();
+    else if (this.dropState === 'queued' && ev.step % 4 === 0 && ev.time >= this.buildStart - 0.05) {
+      const beatsLeft = Math.round((this.buildEnd - ev.time) / (this.transport.stepDur * 4));
+      if (beatsLeft >= 1 && beatsLeft <= 4) {
+        this.hud.countdown(String(beatsLeft));
+        V.tom(this.audio, this.audio.now, 0.5, 12 - beatsLeft * 2);
+      }
+    }
     if (ev.step % 4 === 0 && this.director) {
       const orders = this.director.onBeat(run.setTime, this.transport.stepDur * 4, this.enemies.aliveCount, !!this.boss);
       for (const o of orders) this.release(o.kind, o.count, o.elite, o.ring);
@@ -1042,6 +1127,7 @@ export class Game {
     const silence = this.silenced ? 0.5 : 1;
     const mult = harmony * (n.accent ? 2 : 1) * (n.ghost ? 0.6 : 1) * drop * silence;
     this.band.hit(n.inst, n.ghost ? 0.4 : n.accent ? 1.2 : 0.8);
+    this.venue.onNote?.(n.inst, n.ghost ? 0.4 : 1);
     fireTrack(this.weaponCtx, t, { step: n.step, mult, accent: n.accent, ghost: n.ghost });
   }
 
@@ -1101,7 +1187,7 @@ export class Game {
     if (dmg > run.bestHit) run.bestHit = dmg;
     if (!o.quiet) {
       // accumulate; flushed as one number per enemy every ~0.18s (or on death)
-      if (e.numAcc === 0) e.numT = 0.18;
+      if (e.numAcc === 0) e.numT = 0.28;
       e.numAcc += dmg;
       e.numCrit = e.numCrit || !!o.crit;
       e.numColor = o.color.getHex();
@@ -1122,7 +1208,7 @@ export class Game {
       this.numBudgetT = this.time;
       this.numBudget = 0;
     }
-    if (++this.numBudget > 12 && !e.numCrit && !big && !e.scripted) {
+    if (++this.numBudget > 7 && !e.numCrit && !big && !e.scripted) {
       e.numAcc = 0;
       return;
     }
@@ -1174,7 +1260,7 @@ export class Game {
     } else if (run.lootRng.chance(0.035 * run.stats.tipsMult)) {
       this.pickups.spawn('tip', e.x, e.z, 1);
     }
-    if (run.lootRng.chance(0.006)) this.pickups.spawn('heart', e.x, e.z, 1);
+    if (run.lootRng.chance(0.011)) this.pickups.spawn('heart', e.x, e.z, 1);
 
     // the Hush bursts into light & sound
     const n = e.kind === 'mote' || e.kind === 'wisp' ? 10 : 18;
@@ -1309,7 +1395,7 @@ export class Game {
     const run = this.run!;
     if (p.invuln > 0 || p.dashT > 0 || this.state !== 'playing' || this.godMode) return;
     run.hp -= amount;
-    p.invuln = 0.75;
+    p.invuln = 0.9;
     const dx = p.x - fromX;
     const dz = p.z - fromZ;
     const d = Math.hypot(dx, dz) || 1;
@@ -1387,7 +1473,42 @@ export class Game {
     this.stage.aberrationKick = 1;
     this.stage.bloomKick = 2.5;
     this.flashScreen('rgba(255,255,255,0.55)');
-    this.hud.announce('DROP!', `${run.stats.dropBars} bars of everything ×2`, '#ffffff', 1.6);
+    this.hud.announce('DROP!', `${run.stats.dropBars} BARS · EVERYTHING ×2`, '#ffffff', 1.8, true);
+    this.stage.surge = 1;
+    this.buildT = 0;
+    // confetti cannons from the four corners of the view
+    const acc = this.venue.palette.accents;
+    for (const [sx, sz] of [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ] as const) {
+      const ox = p.x + sx * 18;
+      const oz = p.z + sz * 11;
+      for (let k = 0; k < 45; k++) {
+        const spread = (Math.random() - 0.5) * 0.9;
+        const dx = -sx * (0.7 + spread) * (14 + Math.random() * 12);
+        const dz = -sz * (0.5 - spread * 0.5) * (10 + Math.random() * 10);
+        this.dark.emit({
+          x: ox,
+          y: 1,
+          z: oz,
+          vx: dx,
+          vy: 12 + Math.random() * 10,
+          vz: dz,
+          life: 2.6 + Math.random(),
+          size: 0.4 + Math.random() * 0.3,
+          sizeEnd: 0.35,
+          color: acc[k % acc.length]!,
+          shape: k % 5 === 0 ? Shape.Note : Shape.Square,
+          drag: 1.1,
+          gravity: 9,
+          spin: (Math.random() - 0.5) * 16,
+          stretch: k % 5 === 0 ? 1 : 0.5,
+        });
+      }
+    }
     V.crowdCheer(this.audio, this.audio.now, 1.4, 3.5);
     this.pickups.vacuum();
     if (this.boss instanceof TheHush) this.boss.breakSilence(this.bossCtx);
@@ -1408,7 +1529,7 @@ export class Game {
     this.boss = this.venue.id === 'basement' ? new Feedback(rim) : this.venue.id === 'cathedral' ? new Cantor(rim) : new TheHush(rim);
     const p = this.player;
     let bx = p.x;
-    let bz = p.z - 16;
+    let bz = p.z - 12;
     clampToBounds(this.venue.bounds, bx, bz, 6, this.tmp);
     bx = this.tmp.x;
     bz = this.tmp.z;
@@ -1420,7 +1541,7 @@ export class Game {
     }
     this.bossCtx.hpMult = this.director!.hpMult(0) * (1 + this.run!.loudness * 0.2);
     this.boss.spawn(this.bossCtx, bx, bz);
-    this.world.add(this.boss.group);
+    this.boss.attach(this.world);
     this.music.backing = 'boss';
     this.hud.announce(this.boss.name, this.boss.title, '#' + this.boss.color.toString(16).padStart(6, '0'), 3.5);
     V.roar(this.audio, this.audio.now, 1);
@@ -1597,6 +1718,19 @@ export class Game {
 
   private draftKeys(): void {
     if (!this.draftPending) return;
+    if (this.autopilot) {
+      if (!this.draftUi.hasPicked) {
+        const offers = this.draftPending.offers;
+        const score = (c: Card): number =>
+          c.kind === 'evolve' ? 100 : c.kind === 'instrument' ? 8 : c.kind === 'notes' ? 7 : c.kind === 'level' ? 6 : c.kind === 'fx' ? 5 : 4;
+        let best = 0;
+        offers.forEach((c, i) => {
+          if (score(c) + Math.random() > score(offers[best]!) + Math.random()) best = i;
+        });
+        this.draftUi.pick(best);
+      } else this.draftUi.finish();
+      return;
+    }
     if (this.input.take('pick1')) this.draftUi.pick(0);
     if (this.input.take('pick2')) this.draftUi.pick(1);
     if (this.input.take('pick3')) this.draftUi.pick(2);
@@ -1850,6 +1984,8 @@ export class Game {
     const drop = this.dropState === 'active';
     this.energy = damp(this.energy, clamp(this.enemies.aliveCount / 140, 0.15, 1) * (drop ? 1.3 : 1), 2, rawDt);
 
+    this.stage.camera.getWorldDirection(this.camDir).negate();
+    this.enemies.setCameraDir(this.camDir);
     this.enemies.render(this.time, beatPhase);
     if (drop && dt > 0) {
       // paper confetti rains for the whole drop
@@ -1897,6 +2033,7 @@ export class Game {
       playerX: p.x,
       playerZ: p.z,
       bossActive: !!this.boss,
+      build: this.buildT,
     });
     this.setVenueBar();
 
@@ -1908,9 +2045,23 @@ export class Game {
     this.numbers.update(dt || rawDt * 0.02);
 
     // camera: follow with look-ahead toward aim, breathe with the beat
-    this.rig.target.set(p.x, 0, p.z);
-    this.rig.setLookAhead(p.aimX * 2.2, p.aimZ * 1.6);
-    this.rig.distance = lerp(this.rig.distance, 31 + (run ? Math.min(6, run.pattern.tracks.length * 0.4) : 0), 0.02);
+    // keep the camera over the room: it may lag the player near the walls instead of showing the void
+    const b = this.venue.bounds;
+    const cx = b.kind === 'rect' ? clamp(p.x, -b.hx + 13, b.hx - 13) : p.x * 0.8;
+    const cz = b.kind === 'rect' ? clamp(p.z, -b.hz + 7, b.hz - 3) : p.z * 0.8;
+    this.rig.target.set(cx, 0, cz);
+    this.venue.occlude?.(p.x, p.z);
+    const boss = this.boss && this.boss.entry?.alive ? this.boss : null;
+    if (boss) {
+      // frame the duel: lean toward the headliner and pull back a little
+      const bx = clamp((boss.x - p.x) * 0.35, -9, 9);
+      const bz = clamp((boss.z - p.z) * 0.35, -7, 7);
+      this.rig.setLookAhead(bx + p.aimX, bz + p.aimZ);
+    } else {
+      this.rig.setLookAhead(p.aimX * 2.2, p.aimZ * 1.6);
+    }
+    const baseDist = 31 + (run ? Math.min(6, run.pattern.tracks.length * 0.4) : 0) + (boss ? 5 : 0) - this.buildT * 7;
+    this.rig.distance = lerp(this.rig.distance, baseDist, 0.02);
     this.rig.pitch = 0.98;
     this.rig.yaw = 0;
     const kick = Math.pow(1 - beatPhase, 6);
@@ -2004,7 +2155,24 @@ export class Game {
       tips: (n = 500) => this.run && (this.run.tips += n),
       give: (inst: InstrumentId) => this.run && (this.run.pattern.addTrack(inst), this.checkGroovesLive()),
       state: () => this.state,
+      bot: (on = true) => (this.autopilot = on),
+      botLog: () => this.autoLog,
+      runInfo: () =>
+        this.run && {
+          level: this.run.level,
+          hp: this.run.hp,
+          kills: this.run.kills,
+          venue: this.run.venueIndex,
+          tracks: this.run.pattern.serialize(),
+          grooves: [...this.run.grooves.active],
+          pedals: Object.entries(this.run.pedals).filter(([, v]) => v > 0),
+          damage: this.run.damage,
+          bestHit: this.run.bestHit,
+          setTime: this.run.setTime,
+          bpm: this.transport.bpm,
+        },
       prof: () => prof.report(),
+      mix: () => import('../dev/mix').then((m) => m.mixReport()),
       profReset: () => prof.reset(),
       backstage: () => this.run && this.openBackstage(),
       results: (won = false) => this.run && this.endRun(won),

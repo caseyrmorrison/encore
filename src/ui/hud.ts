@@ -38,6 +38,7 @@ export class Hud {
   private readonly bossFill: HTMLElement;
   private readonly bossName: HTMLElement;
   private readonly toasts: HTMLElement;
+  private readonly bottom: HTMLElement;
   private readonly muffled: HTMLElement;
   private readonly dash: HTMLElement[] = [];
   private readonly beatDot: HTMLElement;
@@ -101,7 +102,7 @@ export class Hud {
       this.toasts,
       this.muffled,
       this.perfect,
-      h('div', { class: 'hud-bottom' }, [this.chips, this.mini]),
+      (this.bottom = h('div', { class: 'hud-bottom' }, [this.chips, this.mini])),
       h('div', { class: 'xp-bar' }, [this.xpFill]),
     ]);
     root.append(this.el);
@@ -227,7 +228,15 @@ export class Hud {
     }
   }
 
-  announce(title: string, sub = '', color = '#fff', seconds = 2.4): void {
+  /** Giant beat countdown during a build-up. */
+  countdown(n: string): void {
+    const c = h('div', { class: 'countdown', text: n });
+    this.el.append(c);
+    setTimeout(() => c.remove(), 700);
+  }
+
+  announce(title: string, sub = '', color = '#fff', seconds = 2.4, huge = false): void {
+    this.banner.classList.toggle('huge', huge);
     this.bannerTitle.textContent = title;
     this.bannerSub.textContent = sub;
     this.banner.style.setProperty('--bc', color);
@@ -258,6 +267,11 @@ export class Hud {
     void this.perfect.offsetWidth;
     this.perfect.classList.add('pop');
     this.perfectT = 0.6;
+  }
+
+  /** Dim the bottom machine when the player is standing under it. */
+  setBottomFade(on: boolean): void {
+    this.set('bfade', on ? 1 : 0, () => this.bottom.classList.toggle('fade', on));
   }
 
   setMuffled(on: boolean): void {

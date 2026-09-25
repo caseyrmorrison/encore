@@ -18,6 +18,7 @@ export interface Buses {
 
 export class AudioEngine {
   readonly ctx: AudioContext;
+  readonly offline: boolean;
   readonly bus: Buses;
   readonly reverbSend: GainNode;
   readonly delaySend: GainNode;
@@ -39,10 +40,17 @@ export class AudioEngine {
   private hitBudget = 0;
   private hitBudgetTime = 0;
 
-  constructor() {
-    const Ctor: typeof AudioContext =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.ctx = new Ctor({ latencyHint: 'interactive' });
+  /** Pass an OfflineAudioContext to render/measure sounds without a speaker. */
+  constructor(offlineCtx?: OfflineAudioContext) {
+    if (offlineCtx) {
+      this.ctx = offlineCtx as unknown as AudioContext;
+      this.offline = true;
+    } else {
+      const Ctor: typeof AudioContext =
+        window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new Ctor({ latencyHint: 'interactive' });
+      this.offline = false;
+    }
     const ctx = this.ctx;
 
     this.master = ctx.createGain();

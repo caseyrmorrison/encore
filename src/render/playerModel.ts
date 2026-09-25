@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import { canvasTexture, M } from './materials';
 
 /**
- * MIC — the last live microphone. A chrome grille ball with a light inside, a gold band,
- * an audio-reactive EQ halo and a glowing cable that trails behind like a comet tail.
+ * MIC — the last live microphone. A classic handheld stage mic: chrome ball grille with a
+ * warm light inside, a gold band, a black tapered handle trailing into a glowing cable.
+ * Tilted head-forward so the silhouette reads as "microphone" from the top-down camera.
  */
 export class PlayerModel {
   readonly root = new THREE.Group();
   readonly body = new THREE.Group();
+  private readonly mic = new THREE.Group();
   private readonly core: THREE.Mesh;
   private readonly coreMat: THREE.MeshStandardMaterial;
   private readonly grille: THREE.Mesh;
@@ -16,6 +18,7 @@ export class PlayerModel {
   private readonly beatRing: THREE.Mesh;
   private readonly beatRingMat: THREE.MeshBasicMaterial;
   private readonly glowPool: THREE.Mesh;
+  private readonly poolMat: THREE.MeshBasicMaterial;
   private readonly cable: THREE.Mesh;
   private readonly cableGeo: THREE.BufferGeometry;
   private readonly cablePts: THREE.Vector3[] = [];
@@ -23,32 +26,29 @@ export class PlayerModel {
   private readonly bars = 36;
   private readonly m4 = new THREE.Matrix4();
   private readonly tmpColor = new THREE.Color();
+  private readonly light: THREE.PointLight;
   private hurtFlash = 0;
   coreColor = new THREE.Color(0xffd9a0);
   /** lift the whole rig (e.g. standing on the title stage) */
   baseY = 0;
+  private readonly tail = new THREE.Vector3();
+
   /** gameplay-only floor helpers (beat ring, light pool) */
   set showFloorFx(on: boolean) {
     this.beatRing.visible = on;
     this.glowPool.visible = on;
   }
-  private readonly light: THREE.PointLight;
 
   constructor() {
     this.root.add(this.body);
-    this.body.position.y = 1.15;
-    this.body.scale.setScalar(1.35);
-    this.light = new THREE.PointLight(0xffd9a0, 40, 14, 1.8);
-    this.light.position.y = 2.2;
-    this.root.add(this.light);
+    this.body.position.y = 1.5;
+    this.body.add(this.mic);
+    // head leads, handle trails behind and down
+    this.mic.rotation.x = 1.05;
 
-    this.coreMat = new THREE.MeshStandardMaterial({
-      color: 0x000000,
-      emissive: this.coreColor,
-      emissiveIntensity: 3,
-    });
-    this.core = new THREE.Mesh(new THREE.SphereGeometry(0.56, 28, 20), this.coreMat);
-    this.body.add(this.core);
+    this.coreMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: this.coreColor, emissiveIntensity: 1.6 });
+    this.core = new THREE.Mesh(new THREE.SphereGeometry(0.62, 28, 20), this.coreMat);
+    this.mic.add(this.core);
 
     const grilleTex = canvasTexture(
       512,
@@ -57,13 +57,12 @@ export class PlayerModel {
         g.fillStyle = '#ffffff';
         g.fillRect(0, 0, w, h);
         g.fillStyle = '#000000';
-        // woven mesh: big round holes on an offset grid
-        const step = 14;
+        const step = 12;
         for (let y = 0; y < h + step; y += step / 2) {
           const off = (y / (step / 2)) % 2 === 0 ? 0 : step / 2;
           for (let x = -step; x < w + step; x += step) {
             g.beginPath();
-            g.arc(x + off, y, 4.6, 0, Math.PI * 2);
+            g.arc(x + off, y, 3.6, 0, Math.PI * 2);
             g.fill();
           }
         }
@@ -74,34 +73,39 @@ export class PlayerModel {
     grilleTex.wrapT = THREE.RepeatWrapping;
     grilleTex.repeat.set(2, 2);
     const grilleMat = new THREE.MeshStandardMaterial({
-      color: 0xe8ecf4,
+      color: 0xf2f4fa,
       metalness: 1,
-      roughness: 0.2,
+      roughness: 0.18,
       alphaMap: grilleTex,
       alphaTest: 0.5,
       side: THREE.DoubleSide,
     });
-    this.grille = new THREE.Mesh(new THREE.SphereGeometry(0.72, 40, 28), grilleMat);
-    this.body.add(this.grille);
+    this.grille = new THREE.Mesh(new THREE.SphereGeometry(0.8, 40, 28, 0, Math.PI * 2, 0, Math.PI * 0.78), grilleMat);
+    this.mic.add(this.grille);
+    const seam = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.05, 10, 48), M.chrome());
+    seam.rotation.x = Math.PI / 2;
+    this.mic.add(seam);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.58, 0.28, 32), M.gold());
+    band.position.y = -0.72;
+    this.mic.add(band);
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x17161b, roughness: 0.55, metalness: 0.25 });
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.3, 2.3, 32), handleMat);
+    handle.position.y = -2.0;
+    this.mic.add(handle);
+    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.49, 0.1, 32), M.glow(0xff2d78, 2));
+    badge.position.y = -1.35;
+    this.mic.add(badge);
+    const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.35, 20), M.chrome());
+    plug.position.y = -3.3;
+    this.mic.add(plug);
 
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.73, 0.075, 14, 48), M.gold());
-    band.rotation.x = Math.PI / 2;
-    this.body.add(band);
-    const band2 = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.05, 12, 40), M.gold());
-    band2.rotation.x = Math.PI / 2;
-    band2.position.y = -0.38;
-    this.body.add(band2);
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.22, 0.55, 24), M.chrome());
-    neck.position.y = -0.62;
-    this.body.add(neck);
-    const neckRing = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.04, 10, 32), M.glow(0xffd9a0, 2));
-    neckRing.rotation.x = Math.PI / 2;
-    neckRing.position.y = -0.85;
-    this.body.add(neckRing);
+    this.light = new THREE.PointLight(0xffd9a0, 40, 14, 1.8);
+    this.light.position.y = 2.4;
+    this.root.add(this.light);
 
     // EQ halo: bars standing on the floor around the mic
     this.haloMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-    const barGeo = new THREE.BoxGeometry(0.12, 1, 0.12);
+    const barGeo = new THREE.BoxGeometry(0.14, 1, 0.14);
     barGeo.translate(0, 0.5, 0);
     this.halo = new THREE.InstancedMesh(barGeo, this.haloMat, this.bars);
     this.halo.frustumCulled = false;
@@ -111,7 +115,7 @@ export class PlayerModel {
     }
     this.root.add(this.halo);
 
-    // beat approach ring — shrinks onto the halo exactly on each beat
+    // beat approach ring — closes onto the halo exactly on each beat (dash when it lands)
     this.beatRingMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -119,30 +123,31 @@ export class PlayerModel {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
-    this.beatRing = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 64), this.beatRingMat);
+    this.beatRing = new THREE.Mesh(new THREE.RingGeometry(0.97, 1, 72), this.beatRingMat);
     this.beatRing.rotation.x = -Math.PI / 2;
     this.beatRing.position.y = 0.05;
     this.root.add(this.beatRing);
 
-    // warm pool of light on the floor, sells that the mic is a light source
-    const poolTex = canvasTexture(128, 128, (g, w, h) => {
+    // hard-edged coloured follow-spot on the floor
+    const poolTex = canvasTexture(256, 256, (g, w, h) => {
       const grd = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-      grd.addColorStop(0, 'rgba(255,220,170,0.9)');
-      grd.addColorStop(0.4, 'rgba(255,190,120,0.35)');
-      grd.addColorStop(1, 'rgba(255,160,90,0)');
+      grd.addColorStop(0, 'rgba(255,255,255,0.55)');
+      grd.addColorStop(0.72, 'rgba(255,255,255,0.4)');
+      grd.addColorStop(0.8, 'rgba(255,255,255,0.9)');
+      grd.addColorStop(0.84, 'rgba(255,255,255,0.0)');
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
     });
-    this.glowPool = new THREE.Mesh(
-      new THREE.PlaneGeometry(6, 6),
-      new THREE.MeshBasicMaterial({
-        map: poolTex,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        opacity: 0.55,
-      }),
-    );
+    this.poolMat = new THREE.MeshBasicMaterial({
+      map: poolTex,
+      color: 0xffd9a0,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0.32,
+    });
+    this.glowPool = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 5.2), this.poolMat);
     this.glowPool.rotation.x = -Math.PI / 2;
     this.glowPool.position.y = 0.03;
     this.root.add(this.glowPool);
@@ -173,13 +178,15 @@ export class PlayerModel {
         void main(){
           float edge = 1.0 - abs(vUv.y - 0.5) * 2.0;
           float fade = pow(clamp(1.0 - vUv.x, 0.0, 1.0), 1.4);
-          float pulse = 0.6 + 0.4 * sin(vUv.x * 40.0 - uTime * 14.0);
-          float a = smoothstep(0.0, 0.5, edge) * fade;
-          gl_FragColor = vec4(uColor * (1.2 + pulse) * a, a);
+          // signal pulses travelling down the lead
+          float pulse = smoothstep(0.85, 1.0, sin(vUv.x * 30.0 - uTime * 12.0));
+          float core = smoothstep(0.35, 0.9, edge);
+          vec3 col = mix(vec3(0.05, 0.04, 0.06), uColor * 2.2, pulse * 0.9 + 0.1);
+          float a = smoothstep(0.0, 0.3, edge) * fade;
+          gl_FragColor = vec4(col * (0.4 + core * 0.6) * a, a);
         }`,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
     this.cable = new THREE.Mesh(this.cableGeo, cableMat);
@@ -193,7 +200,7 @@ export class PlayerModel {
 
   resetCable(x: number, z: number): void {
     this.cablePts.length = 0;
-    for (let i = 0; i < this.cableLen; i++) this.cablePts.push(new THREE.Vector3(x, 0.45, z));
+    for (let i = 0; i < this.cableLen; i++) this.cablePts.push(new THREE.Vector3(x, 0.3, z));
   }
 
   hurt(): void {
@@ -214,41 +221,45 @@ export class PlayerModel {
   ): void {
     this.root.position.set(x, this.baseY, z);
     const kick = Math.pow(1 - beatPhase, 6);
-    this.body.position.y = 1.15 + Math.sin(time * 3) * 0.08 + kick * 0.1;
-    this.body.rotation.set(tilt * 0.35, facing, 0);
-    this.grille.rotation.y += dt * 0.6;
-    const s = 1.35 * (1 + kick * 0.08 + (dashing ? 0.1 : 0));
-    this.body.scale.set(s * (dashing ? 0.85 : 1), s * (dashing ? 1.2 : 1), s * (dashing ? 0.85 : 1));
+    this.body.position.y = 1.5 + Math.sin(time * 3) * 0.08 + kick * 0.12;
+    this.body.rotation.set(0, facing, 0);
+    // lean into movement; the dash stretches the whole mic
+    this.mic.rotation.x = 1.05 + tilt * 0.25 + (dashing ? 0.3 : 0);
+    this.mic.rotation.z = Math.sin(time * 2.1) * 0.05;
+    this.grille.rotation.y += dt * 0.4;
+    const s = 0.95 * (1 + kick * 0.07);
+    this.body.scale.set(s * (dashing ? 0.9 : 1), s, s * (dashing ? 1.25 : 1));
 
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 4);
     const flicker = invuln ? (Math.sin(time * 50) > 0 ? 1 : 0.35) : 1;
     this.coreMat.emissive.copy(this.coreColor).lerp(new THREE.Color(1, 0.1, 0.15), this.hurtFlash);
-    this.coreMat.emissiveIntensity = (4 + kick * 5 + spectrum[2]! * 4) * flicker;
+    this.coreMat.emissiveIntensity = (1.4 + kick * 2.2 + spectrum[2]! * 1.6) * flicker;
     this.light.color.copy(this.coreMat.emissive);
-    this.light.intensity = (30 + kick * 40) * flicker;
+    this.light.intensity = (26 + kick * 30) * flicker;
+    this.poolMat.color.copy(this.coreColor);
 
-    // halo bars
     for (let i = 0; i < this.bars; i++) {
       const a = (i / this.bars) * Math.PI * 2 + time * 0.25;
-      const band = spectrum[Math.floor((Math.abs(((i / this.bars) * 2 - 1)) * 0.999) * spectrum.length)] ?? 0;
-      const h = 0.08 + band * band * 2.4 + kick * 0.2;
+      const band = spectrum[Math.floor(Math.abs((i / this.bars) * 2 - 1) * 0.999 * spectrum.length)] ?? 0;
+      const h = 0.06 + band * band * 2.2 + kick * 0.15;
       this.m4.makeRotationY(-a);
       this.m4.scale(new THREE.Vector3(1, h, 1));
-      this.m4.setPosition(Math.cos(a) * 1.55, 0.02, Math.sin(a) * 1.55);
+      this.m4.setPosition(Math.cos(a) * 1.7, 0.02, Math.sin(a) * 1.7);
       this.halo.setMatrixAt(i, this.m4);
     }
     this.halo.instanceMatrix.needsUpdate = true;
 
-    // approach ring: radius 4 → 1.55 across the beat
-    this.beatRing.scale.setScalar(1.55 + (1 - beatPhase) * 2.6);
-    this.beatRingMat.opacity = 0.08 + Math.pow(1 - beatPhase, 0.5) * 0.12 + kick * 0.5;
+    // approach ring: faint while travelling, bright as it lands on the beat
+    this.beatRing.scale.setScalar(1.7 + (1 - beatPhase) * 2.6);
+    this.beatRingMat.opacity = 0.04 + Math.pow(beatPhase, 3) * 0.3 + kick * 0.55;
+    this.beatRingMat.color.copy(this.coreColor);
 
-    this.glowPool.scale.setScalar(1 + kick * 0.25);
+    this.glowPool.scale.setScalar(1 + kick * 0.12);
 
-    // cable
-    const head = new THREE.Vector3(x - Math.sin(facing) * 0.5, 0.5, z - Math.cos(facing) * 0.5);
+    // cable plugs into the handle, trailing behind
+    this.tail.set(x - Math.sin(facing) * 2.4, 0.5, z - Math.cos(facing) * 2.4);
     if (this.cablePts.length === 0) this.resetCable(x, z);
-    this.cablePts[0]!.copy(head);
+    this.cablePts[0]!.copy(this.tail);
     for (let i = 1; i < this.cablePts.length; i++) {
       const prev = this.cablePts[i - 1]!;
       const p = this.cablePts[i]!;
@@ -260,7 +271,7 @@ export class PlayerModel {
         p.x = prev.x + (dx / d) * seg;
         p.z = prev.z + (dz / d) * seg;
       }
-      p.y = 0.12 + 0.35 * Math.pow(1 - i / this.cablePts.length, 2);
+      p.y = 0.1 + 0.4 * Math.pow(1 - i / this.cablePts.length, 3);
     }
     const pos = this.cableGeo.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < this.cablePts.length; i++) {
@@ -272,7 +283,7 @@ export class PlayerModel {
       const tl = Math.hypot(tx, tz) || 1;
       tx /= tl;
       tz /= tl;
-      const w = 0.14 * (1 - (i / this.cablePts.length) * 0.6);
+      const w = 0.16 * (1 - (i / this.cablePts.length) * 0.5);
       pos.setXYZ(i * 2, p.x - tz * w, p.y, p.z + tx * w);
       pos.setXYZ(i * 2 + 1, p.x + tz * w, p.y, p.z - tx * w);
     }

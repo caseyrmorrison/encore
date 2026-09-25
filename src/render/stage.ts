@@ -4,6 +4,7 @@ import {
   BlendFunction,
   ChromaticAberrationEffect,
   EffectComposer,
+  HueSaturationEffect,
   EffectPass,
   NoiseEffect,
   RenderPass,
@@ -34,6 +35,10 @@ export class Stage {
   readonly aberration: ChromaticAberrationEffect;
   readonly vignette: VignetteEffect;
   private readonly noise: NoiseEffect;
+  readonly hueSat: HueSaturationEffect;
+  /** 0..1 build-up tunnel vision; drop saturation surge */
+  buildUp = 0;
+  surge = 0;
   /** Extra aberration pulse; decays each frame. */
   aberrationKick = 0;
   bloomKick = 0;
@@ -82,7 +87,8 @@ export class Stage {
     });
     this.noise = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: false });
     this.noise.blendMode.opacity.value = 0.09;
-    this.composer.addPass(new EffectPass(this.camera, this.aberration, this.noise));
+    this.hueSat = new HueSaturationEffect({ hue: 0, saturation: 0 });
+    this.composer.addPass(new EffectPass(this.camera, this.aberration, this.noise, this.hueSat));
 
     window.addEventListener('resize', this.onResize);
   }
@@ -109,6 +115,10 @@ export class Stage {
     const ab = 0.0005 + this.aberrationKick * 0.012;
     this.aberration.offset.set(ab, ab * 0.6);
     this.bloom.intensity = this.baseBloom + this.bloomKick;
+    this.surge *= Math.exp(-dt * 0.9);
+    this.vignette.darkness = 0.62 + this.buildUp * 0.33;
+    this.vignette.offset = 0.28 - this.buildUp * 0.12;
+    this.hueSat.saturation = this.surge * 0.35 - this.buildUp * 0.35;
     this.composer.render(dt);
   }
 }

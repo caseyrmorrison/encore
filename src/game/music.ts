@@ -131,7 +131,7 @@ export class Music {
           t,
           [0, 1, 2, 3].map((k) => chordTone(chord, k, 0)),
           dur * 8,
-          vel * 1.4,
+          vel * 0.9,
           0.6,
         );
         break;
@@ -217,16 +217,16 @@ export class Music {
     }
     if (this.plinksThisStep++ >= 3) return;
     const root = PROGRESSIONS[this.backing].pentatonicRoot;
-    this.streakDegree = Math.min(18, Math.floor(streak / 3));
+    this.streakDegree = Math.min(11, Math.floor(streak / 4));
     const deg = this.streakDegree + this.plinksThisStep;
-    V.bell(this.eng, t, pentatonicNote(root + 12, deg), 0.55, undefined, 0.45);
+    V.bell(this.eng, t, pentatonicNote(root + 12, deg), 1.25, undefined, 0.45);
   }
 
   /** Ascending pickup sparkle, quantised to 32nds for a musical shimmer. */
   pickup(chain: number): void {
     const root = PROGRESSIONS[this.backing].pentatonicRoot;
     const t = this.eng.now + 0.005;
-    V.bell(this.eng, t, pentatonicNote(root + 24, chain % 15), 0.28, undefined, 0.18);
+    V.bell(this.eng, t, pentatonicNote(root + 24, chain % 15), 0.6, undefined, 0.18);
   }
 
   fanfare(big = false): void {

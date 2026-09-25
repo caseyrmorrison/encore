@@ -22,12 +22,16 @@ uniform float uBeat;
 uniform float uBar;
 uniform float uEnergy;
 uniform float uDrop;
+uniform float uBuild;
 uniform vec2 uPlayer;
 uniform vec2 uHalf;
 uniform vec3 uCols[4];
 uniform vec4 uSpots[6];
 uniform vec3 uSpotCols[6];
 uniform vec2 uBall;
+uniform float uStep;
+uniform float uSnare;
+uniform float uHat;
 varying vec3 vWorld;
 
 vec3 pick(float i) {
@@ -72,23 +76,39 @@ void main() {
   float wave = smoothstep(0.55, 1.0, sin(dd * 0.55 - uTime * 16.0));
   float strobe = step(0.5, fract(uBar * 16.0)) * 0.6 + 0.4;
   lit = max(lit, uDrop * wave * strobe);
+  // idle patterns sit back; the music drives the light
+  lit *= mix(0.42, 0.72, uDrop);
   vec3 tc = pick(h * 4.0 + bar + floor(cell.x * 0.25));
+
+  // THE FLOOR IS THE SEQUENCER: the playhead sweeps a column of tiles across the room
+  float colIdx = floor((cc.x + uHalf.x) / (uHalf.x * 2.0) * 16.0);
+  float head = floor(uStep);
+  float ph = step(abs(colIdx - head), 0.5) * (1.0 - fract(uStep) * 0.6);
+  float trail = step(abs(colIdx - mod(head - 1.0, 16.0)), 0.5) * 0.35;
+  float sweep = max(ph * 0.45, trail * 0.15);
+  // snares/claps flash the performer's row, hats sparkle
+  float rowHit = step(abs(cc.y - uPlayer.y), 1.5) * uSnare;
+  float sparkle = step(0.93, hash21(cell + floor(uTime * 16.0))) * uHat;
+  vec3 seqCol = uCols[0] * sweep + uCols[1] * rowHit * 0.9 + uCols[3] * sparkle * 0.9;
+  lit = max(lit, max(sweep, max(rowHit * 0.9, sparkle * 0.9)));
 
   // frosted glass lit from beneath: hot centre, soft falloff, bright rim when lit
   float inner = clamp(1.0 - length(f) * 1.5, 0.0, 1.0);
   vec3 col = vec3(0.008, 0.006, 0.012);
-  col += tc * lit * (0.2 + inner * inner * 2.4 + smoothstep(0.38, 0.47, edgeDist) * 0.8) * 1.4;
+  vec3 lightCol = mix(tc, seqCol / max(0.001, max(max(seqCol.r, seqCol.g), seqCol.b)), step(0.01, length(seqCol)) * 0.85);
+  col += lightCol * lit * (0.2 + inner * inner * 2.4 + smoothstep(0.38, 0.47, edgeDist) * 0.8) * 1.4;
   // unlit glass still catches a whisper of colour + fine scratches
   col += tc * 0.012 * (0.4 + inner);
   col += vec3(0.006) * smoothstep(0.7, 0.74, fbm(w * 3.0 + h * 10.0));
 
   // mirror-ball specks sweeping the floor
   vec2 q = w - uBall;
-  float ang = uTime * 0.22;
+  float ang = uTime * 0.12;
   q = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * q;
-  vec2 g = q * 0.5;
-  float speck = smoothstep(0.13, 0.0, length(fract(g) - 0.5)) * step(0.7, hash21(floor(g)));
-  col += vec3(1.0, 0.95, 0.9) * speck * 0.4 * smoothstep(40.0, 8.0, length(q));
+  vec2 g = q * 0.32;
+  float speck = smoothstep(0.24, 0.02, length(fract(g) - 0.5)) * step(0.72, hash21(floor(g)));
+  vec3 speckTint = mix(vec3(1.0, 0.75, 0.9), vec3(0.7, 0.9, 1.0), hash21(floor(g) + 3.1));
+  col += speckTint * speck * 0.16 * smoothstep(40.0, 8.0, length(q));
 
   // moving-head spots
   for (int i = 0; i < 6; i++) {
@@ -109,6 +129,7 @@ void main() {
   // hazard edge: amber LED strip around the floor
   float rim = smoothstep(0.35, 0.0, abs(edge + 0.15));
   col += vec3(1.0, 0.35, 0.12) * rim * (0.9 + 0.8 * beatPulse);
+  col *= 1.0 - uBuild * 0.7;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -285,7 +306,7 @@ export class Basement implements Venue {
   readonly progression = 'basement' as const;
   readonly bounds: Bounds = { kind: 'rect', hx: HX, hz: HZ };
   readonly palette: VenuePalette = {
-    rim: new THREE.Color(0xb04a8a),
+    rim: new THREE.Color(0x8a3aa0),
     floor: new THREE.Color(0xff2d6a),
     accents: [0xff1f5a, 0xff8a1f, 0xd43dff, 0x2ec8ff],
     fog: 0x0e0508,
@@ -311,6 +332,7 @@ export class Basement implements Venue {
   private readonly ball: THREE.Mesh;
   private readonly neonMats: THREE.MeshBasicMaterial[] = [];
   private readonly parLenses: THREE.MeshStandardMaterial[] = [];
+  private readonly pillarMats: THREE.MeshStandardMaterial[] = [];
   private strobe = 0;
   private readonly tmpV = new THREE.Vector3();
   readonly stageCenter = new THREE.Vector3(0, 1.2, -HZ - 3.5);
@@ -326,12 +348,16 @@ export class Basement implements Venue {
         uBar: { value: 0 },
         uEnergy: { value: 0 },
         uDrop: { value: 0 },
+        uBuild: { value: 0 },
         uPlayer: { value: new THREE.Vector2() },
         uHalf: { value: new THREE.Vector2(HX, HZ) },
         uCols: { value: acc },
         uSpots: { value: this.spots },
         uSpotCols: { value: this.spotCols },
         uBall: { value: new THREE.Vector2(-12, -19) },
+        uStep: { value: 0 },
+        uSnare: { value: 0 },
+        uHat: { value: 0 },
         ...this.rip.uniforms(),
       },
     });
@@ -404,10 +430,11 @@ export class Basement implements Venue {
     // obstacle pillars: round concrete columns with steel collars and neon rings
     const pillarTex = concreteTexture('#6b6668');
     pillarTex.repeat.set(2, 3);
-    const pillarMat = new THREE.MeshStandardMaterial({ map: pillarTex, roughness: 0.9, color: 0x9a9396 });
     this.obstacles.forEach((o, i) => {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(o.r, o.r * 1.06, 8, 28), pillarMat);
-      p.position.set(o.x, 4, o.z);
+      const pillarMat = new THREE.MeshStandardMaterial({ map: pillarTex, roughness: 0.9, color: 0x9a9396, transparent: true });
+      this.pillarMats.push(pillarMat);
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(o.r, o.r * 1.06, 6.5, 28), pillarMat);
+      p.position.set(o.x, 3.25, o.z);
       this.group.add(p);
       const neonMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(this.palette.accents[i % 4]!).multiplyScalar(2) });
       this.neonMats.push(neonMat);
@@ -421,7 +448,7 @@ export class Basement implements Venue {
       collar.position.set(o.x, 0.18, o.z);
       this.group.add(collar);
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 1.3, o.r * 1.05, 0.6, 28), pillarMat);
-      cap.position.set(o.x, 8.2, o.z);
+      cap.position.set(o.x, 6.7, o.z);
       this.group.add(cap);
     });
 
@@ -721,8 +748,11 @@ export class Basement implements Venue {
     u.uBeat!.value = f.beatPhase;
     u.uEnergy!.value = f.energy;
     u.uDrop!.value = f.drop ? 1 : 0;
+    u.uBuild!.value = f.build;
     (u.uPlayer!.value as THREE.Vector2).set(f.playerX, f.playerZ);
     this.strobe *= Math.exp(-f.dt * 9);
+    u.uSnare!.value = (u.uSnare!.value as number) * Math.exp(-f.dt * 7);
+    u.uHat!.value = (u.uHat!.value as number) * Math.exp(-f.dt * 10);
     const beat = Math.pow(1 - f.beatPhase, 3);
     this.hazeMat.uniforms.uTime!.value = f.time;
 
@@ -763,6 +793,24 @@ export class Basement implements Venue {
 
   setBar(barFloat: number): void {
     this.floorMat.uniforms.uBar!.value = barFloat;
+    this.floorMat.uniforms.uStep!.value = (barFloat - Math.floor(barFloat)) * 16;
+  }
+
+  occlude(px: number, pz: number): void {
+    // a pillar hides the floor just "north" of it on screen; ghost it if the player is there
+    this.obstacles.forEach((o, i) => {
+      const hidden = Math.abs(px - o.x) < o.r + 1.8 && pz < o.z + 1 && pz > o.z - 6.5;
+      const m = this.pillarMats[i]!;
+      m.opacity += ((hidden ? 0.22 : 1) - m.opacity) * 0.15;
+      m.depthWrite = m.opacity > 0.9;
+    });
+  }
+
+  onNote(inst: string, strength: number): void {
+    const u = this.floorMat.uniforms;
+    if (inst === 'snare' || inst === 'clap') u.uSnare!.value = Math.min(1, (u.uSnare!.value as number) + strength);
+    else if (inst === 'hat' || inst === 'tom' || inst === 'cowbell' || inst === 'scratch')
+      u.uHat!.value = Math.min(1, (u.uHat!.value as number) + strength * 0.8);
   }
 
   spawnPoint(rng: Rng, px: number, pz: number, out: { x: number; z: number }): void {

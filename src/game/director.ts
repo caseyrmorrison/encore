@@ -15,8 +15,8 @@ export interface VenueTuning {
 export const TUNING: VenueTuning[] = [
   {
     length: 165,
-    rate0: 1.3,
-    rateGrowth: 1 / 21,
+    rate0: 2.2,
+    rateGrowth: 1 / 20,
     hp: 1,
     unlock: { mote: 0, static: 0.15, shusher: 0.32, mute: 0.45, damper: 0.62 },
     elitesAt: [0.38, 0.74],
@@ -124,7 +124,7 @@ export class Director {
     }
     while (this.ringsDone < this.tuning.ringsAt.length && f >= this.tuning.ringsAt[this.ringsDone]!) {
       this.ringsDone++;
-      out.push({ kind: 'mote', count: 18 + this.ringsDone * 4, elite: false, ring: true });
+      out.push({ kind: 'mote', count: 12 + this.ringsDone * 4 + Math.round(this.tuning.hp * 2), elite: false, ring: true });
     }
     return out;
   }

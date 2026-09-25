@@ -110,6 +110,8 @@ export class SeqEditor {
       this.grid.append(row);
     });
     this.lastVersion = -1;
+    this.el.classList.toggle('compact', this.pattern.tracks.length >= 5);
+    this.el.classList.toggle('tiny', this.pattern.tracks.length >= 7);
     this.refresh();
   }
 

@@ -153,7 +153,7 @@ export function fireTrack(ctx: WeaponCtx, t: Track, info: FireInfo): void {
       blast(ctx, t, ctx.px, ctx.pz, r, d, knock);
       ctx.ground.add(GroundKind.Shock, ctx.px, ctx.pz, 0.5, r, 0.32, color, { thickness: 0.07, alpha: 0.85 * ghost });
       ctx.ground.add(GroundKind.Disc, ctx.px, ctx.pz, r * 0.5, r * 0.9, 0.14, color, { alpha: 0.1 * ghost });
-      ctx.ripple(ctx.px, ctx.pz, color, 0.35 * ghost);
+      ctx.ripple(ctx.px, ctx.pz, color, 0.22 * ghost);
       ctx.shake(0.12 * ghost * acc);
       if (t.evolved) {
         for (let k = 0; k < 6; k++) {

@@ -618,45 +618,65 @@ button {
 }
 .mini-seq {
   display: grid;
-  gap: 3px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(8, 6, 14, 0.66);
-  border: 1px solid var(--line);
+  gap: 4px;
+  padding: 10px 12px 10px 10px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(44, 42, 49, 0.92), rgba(27, 26, 31, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.25s;
+}
+.hud-bottom.fade .mini-seq,
+.hud-bottom.fade .groove-chips {
+  opacity: 0.28;
 }
 .mini-row {
   --c: #fff;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 .mini-label {
   font-family: var(--display);
-  font-size: 10px;
-  width: 34px;
+  font-size: 11px;
+  width: 38px;
   color: var(--c);
   letter-spacing: 0.05em;
   text-shadow: 0 0 8px var(--c);
 }
 .mini-cell {
+  --q: #ff5a3a;
   display: block;
-  width: 20px;
-  height: 11px;
+  width: 26px;
+  height: 13px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.07);
+  background: color-mix(in srgb, var(--q) 16%, #1a1918);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
-.mini-cell.beat {
-  background: rgba(255, 255, 255, 0.11);
+/* TR-808 step colours by quarter: red, orange, yellow, cream */
+.mini-cell:nth-child(n + 6) {
+  --q: #ff9a2e;
+}
+.mini-cell:nth-child(n + 10) {
+  --q: #ffd84d;
+}
+.mini-cell:nth-child(n + 14) {
+  --q: #efe6d2;
 }
 .mini-cell.on {
-  background: color-mix(in srgb, var(--c) 55%, #000);
+  background: color-mix(in srgb, var(--c) 70%, #000);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--c) 50%, transparent);
 }
 .mini-cell.play {
-  background: rgba(255, 255, 255, 0.22);
+  background: color-mix(in srgb, var(--q) 38%, #2a2826);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
 }
 .mini-cell.on.play {
-  background: var(--c);
-  box-shadow: 0 0 10px var(--c);
+  background: color-mix(in srgb, var(--c) 100%, #fff 35%);
+  box-shadow:
+    0 0 18px var(--c),
+    0 0 4px #fff;
+  transform: scaleY(1.25);
 }
 .xp-bar {
   position: absolute;
@@ -1653,4 +1673,77 @@ body.overlay-open .hud .streak {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* big kits: squeeze the machine so it always fits on screen */
+.seq.compact .seq-cell {
+  height: 26px;
+}
+.seq.compact .seq-icon {
+  width: 28px;
+  height: 28px;
+}
+.seq.compact .seq-grid {
+  gap: 3px;
+}
+.seq.tiny .seq-cell {
+  height: 20px;
+}
+.seq.tiny .seq-icon {
+  width: 22px;
+  height: 22px;
+}
+.seq.tiny .seq-row {
+  gap: 3px;
+  padding: 1px 2px;
+}
+.draft-hint {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.draft-hint b {
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 3px;
+}
+
+.countdown {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  font-family: var(--display);
+  font-size: clamp(90px, 16vw, 220px);
+  color: #fff;
+  text-shadow:
+    0 0 30px var(--hot),
+    0 0 80px var(--hot);
+  pointer-events: none;
+  animation: countdown 0.7s var(--ease-out) forwards;
+}
+@keyframes countdown {
+  0% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0;
+  }
+}
+.banner.huge .banner-title {
+  font-size: clamp(70px, 12vw, 170px);
+}
+.banner.huge .banner-sub {
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  color: #fff;
 }

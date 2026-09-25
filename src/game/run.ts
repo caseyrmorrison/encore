@@ -50,7 +50,7 @@ export function computeStats(pedals: Record<PedalId, number>, grooves: GrooveSta
     harmonyPer: 0.18 + pedals.harmonizer * 0.12,
     looperChance: pedals.looper * 0.12,
     tipsMult: 1 + pedals.goldchain * 0.6,
-    maxHp: 100 + pedals.roadie * 25 - loudness * 5,
+    maxHp: 120 + pedals.roadie * 25 - loudness * 6,
     bpmBonus: pedals.clicktrack * 8,
   };
 }
@@ -108,7 +108,8 @@ export class Run {
 
   get xpToNext(): number {
     const l = this.level;
-    return Math.round(7 + l * 4.2 + Math.pow(l, 1.75) * 0.7);
+    // L1→2 in ~10s, a draft every ~12-15s through the Basement, ~L35 by the final headliner
+    return Math.round(5 + l * 5 + l * l * 0.6);
   }
 
   /** Recompute grooves & stats if the pattern or pedals changed. Returns newly discovered grooves. */

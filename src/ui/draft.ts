@@ -29,6 +29,7 @@ export class DraftScreen {
   private readonly doneBtn: HTMLButtonElement;
   private readonly editorSlot: HTMLElement;
   private opts: DraftOptions | null = null;
+  private readonly hint: HTMLElement;
   private picked = false;
   private cardEls: HTMLElement[] = [];
 
@@ -48,10 +49,11 @@ export class DraftScreen {
       on: { click: () => this.finish() },
     });
     this.editorSlot = h('div', { class: 'editor-slot' });
+    this.hint = h('div', { class: 'draft-hint' }, ['PRESS ', h('b', { text: '1' }), h('b', { text: '2' }), h('b', { text: '3' }), ' OR CLICK A CARD']);
     this.el = h('div', { class: 'overlay draft hidden', role: 'dialog', aria: { modal: 'true', label: 'Level up' } }, [
       h('div', { class: 'draft-head' }, [this.title, this.sub]),
       this.cards,
-      h('div', { class: 'draft-actions' }, [this.rerollBtn, h('div', { class: 'spacer' }), this.doneBtn]),
+      h('div', { class: 'draft-actions' }, [this.rerollBtn, h('div', { class: 'spacer' }), this.hint, this.doneBtn]),
       this.editorSlot,
     ]);
     root.append(this.el);
@@ -138,6 +140,9 @@ export class DraftScreen {
   setDoneState(ready: boolean, label?: string): void {
     this.doneBtn.disabled = !ready;
     this.doneBtn.textContent = label ?? 'BACK TO THE SHOW ▸';
+    // before a pick there is no button, just the instruction
+    show(this.doneBtn, ready);
+    show(this.hint, !ready);
   }
 
   finish(): void {

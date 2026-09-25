@@ -28,6 +28,8 @@ export interface FrameInfo {
   playerX: number;
   playerZ: number;
   bossActive: boolean;
+  /** 0..1 progress of a DROP build-up (the room darkens toward the downbeat) */
+  build: number;
 }
 
 export interface Venue {
@@ -44,6 +46,10 @@ export interface Venue {
   update(f: FrameInfo): void;
   /** Called on each 16th step (for strobe patterns etc.). */
   onStep(step: number, bar: number): void;
+  /** A player instrument sounded: venues can make the room react (floor-as-sequencer). */
+  onNote?(inst: string, strength: number): void;
+  /** Fade props that stand between the camera and the action. */
+  occlude?(px: number, pz: number): void;
   ripple(x: number, z: number, color: THREE.Color | number, strength?: number): void;
   spawnPoint(rng: Rng, px: number, pz: number, out: { x: number; z: number }): void;
   dispose(): void;
@@ -112,10 +118,10 @@ vec3 ripples(vec2 w) {
   for (int i = 0; i < 8; i++) {
     vec4 r = uRipples[i];
     float age = uTime - r.z;
-    if (age < 0.0 || age > 1.4) continue;
-    float rad = age * 24.0;
+    if (age < 0.0 || age > 1.0) continue;
+    float rad = age * 30.0;
     float d = abs(length(w - r.xy) - rad);
-    float ring = smoothstep(0.7, 0.0, d) * pow(1.0 - age / 1.4, 2.0);
+    float ring = smoothstep(0.45, 0.0, d) * pow(1.0 - age, 2.5);
     acc += uRippleColors[i] * ring * r.w;
   }
   return acc;

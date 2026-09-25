@@ -29,6 +29,7 @@ uniform float uBeat;
 uniform float uBar;
 uniform float uEnergy;
 uniform float uDrop;
+uniform float uBuild;
 uniform vec2 uPlayer;
 uniform vec2 uHalf;
 uniform vec3 uCols[4];
@@ -73,6 +74,7 @@ void main() {
   vec3 pit = vec3(0.01, 0.008, 0.015);
   col = mix(pit, col, inside);
   col += uCols[1] * lip * 0.8;
+  col *= 1.0 - uBuild * 0.7;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -117,7 +119,7 @@ export class Mainstage implements Venue {
   readonly progression = 'mainstage' as const;
   readonly bounds: Bounds = { kind: 'rect', hx: HX, hz: HZ };
   readonly palette: VenuePalette = {
-    rim: new THREE.Color(0x9a3aa0),
+    rim: new THREE.Color(0x8a3ac0),
     floor: new THREE.Color(0x4dc3ff),
     accents: [0xff2dd4, 0x2ee6ff, 0xffe14d, 0x8c5aff],
     fog: 0x06030c,
@@ -157,6 +159,7 @@ export class Mainstage implements Venue {
         uBar: { value: 0 },
         uEnergy: { value: 0 },
         uDrop: { value: 0 },
+        uBuild: { value: 0 },
         uPlayer: { value: new THREE.Vector2() },
         uHalf: { value: new THREE.Vector2(HX, HZ) },
         uCols: { value: acc },
@@ -374,6 +377,7 @@ export class Mainstage implements Venue {
     u.uBeat!.value = f.beatPhase;
     u.uEnergy!.value = f.energy;
     u.uDrop!.value = f.drop ? 1 : 0;
+    u.uBuild!.value = f.build;
     (u.uPlayer!.value as THREE.Vector2).set(f.playerX, f.playerZ);
     this.ledMat.uniforms.uTime!.value = f.time;
     this.ledMat.uniforms.uBeat!.value = f.beatPhase;

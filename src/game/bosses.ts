@@ -93,6 +93,15 @@ export abstract class Boss {
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
+    this.extras.forEach((m) => m.removeFromParent());
+  }
+
+  /** meshes a boss parks directly in the world (floor sigils) — removed on dispose */
+  protected readonly extras: THREE.Object3D[] = [];
+
+  attach(parent: THREE.Object3D): void {
+    parent.add(this.group);
+    for (const x of this.extras) parent.add(x);
   }
 }
 
@@ -303,7 +312,7 @@ export class Cantor extends Boss {
   readonly title = 'Choirmaster of the unsung';
   readonly color = 0x9fb8ff;
   private readonly bodyMat: THREE.ShaderMaterial;
-  private readonly halo: THREE.Mesh;
+  private halo: THREE.Mesh;
   private readonly hands: THREE.Mesh[] = [];
   private angle = 0;
   private tx = 0;
@@ -311,30 +320,79 @@ export class Cantor extends Boss {
   private fade = 1;
   private readonly zones: { x: number; z: number; life: number }[] = [];
 
-  constructor(rim: THREE.Color) {
+  private readonly sigil: THREE.Mesh;
+  private readonly sigilMat: THREE.ShaderMaterial;
+  private readonly crown: THREE.Group;
+
+  constructor(_rim: THREE.Color) {
     super();
     const look = hushLooks().mute;
-    this.bodyMat = makeHushMaterial(look, rim, new THREE.Color(0x202050));
+    // the Cantor's robe catches gold at its edges so it reads on dark marble from above
+    this.bodyMat = makeHushMaterial(look, new THREE.Color(0xffc870), new THREE.Color(0x6040ff));
+    (this.bodyMat.uniforms.uEyeParams!.value as THREE.Vector4).set(1.62, 0.2, 0.09, 3);
+    // tall robe seen from above is mostly grazing: keep the gold to a thin edge
+    (this.bodyMat.uniforms.uRimShape!.value as THREE.Vector2).set(9, 0.9);
     const robe = new THREE.Mesh(look.geometry, this.bodyMat);
-    robe.scale.setScalar(3.1);
+    robe.scale.setScalar(3.4);
     this.group.add(robe);
-    this.halo = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.12, 12, 64), M.glow(0xffd36b, 3));
-    this.halo.position.set(0, 6.6, -0.6);
-    this.group.add(this.halo);
-    const handGeo = new THREE.SphereGeometry(0.55, 16, 12);
+    // crown of light: a flat golden ring with rays, visible from the camera
+    this.crown = new THREE.Group();
+    this.crown.position.set(0, 7.4, 0);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.16, 12, 64), M.glow(0xffd36b, 3.5));
+    ring.rotation.x = Math.PI / 2;
+    this.crown.add(ring);
+    this.halo = ring;
+    const rayGeo = new THREE.ConeGeometry(0.22, 1.4, 8);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const ray = new THREE.Mesh(rayGeo, M.glow(0xffe9a8, 3));
+      ray.position.set(Math.cos(a) * 3.1, 0, Math.sin(a) * 3.1);
+      ray.rotation.z = -Math.PI / 2;
+      ray.rotation.y = -a;
+      this.crown.add(ray);
+    }
+    this.group.add(this.crown);
+    const handGeo = new THREE.SphereGeometry(0.6, 16, 12);
     for (const s of [-1, 1]) {
       const h = new THREE.Mesh(handGeo, this.bodyMat);
-      h.position.set(s * 2.6, 3.4, 0.8);
+      h.position.set(s * 2.9, 3.6, 0.9);
       this.group.add(h);
       this.hands.push(h);
     }
+    // rotating rose-window sigil on the floor beneath
+    this.sigilMat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uPulse: { value: 0 } },
+      vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: /* glsl */ `
+        uniform float uTime; uniform float uPulse; varying vec2 vUv;
+        void main(){
+          vec2 q = (vUv - 0.5) * 2.0; float r = length(q); float a = atan(q.y, q.x + 1e-4) + uTime * 0.3;
+          float rim = smoothstep(0.03, 0.0, abs(r - 0.95)) + smoothstep(0.02, 0.0, abs(r - 0.8));
+          float petals = smoothstep(0.035, 0.0, abs(r - (0.5 + 0.22 * cos(a * 8.0)))) * step(r, 0.8);
+          float spokes = smoothstep(0.02, 0.0, abs(sin(a * 12.0)) * r) * step(0.25, r) * step(r, 0.8);
+          float v = (rim + petals + spokes * 0.6) * (0.6 + uPulse * 0.8);
+          gl_FragColor = vec4(vec3(1.0, 0.78, 0.35) * v * 1.6, v);
+        }`,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.sigil = new THREE.Mesh(new THREE.PlaneGeometry(13, 13), this.sigilMat);
+    this.sigil.rotation.x = -Math.PI / 2;
+    this.sigil.position.y = 0.08;
+    this.extras.push(this.sigil);
+  }
+
+  get sigilMesh(): THREE.Mesh {
+    return this.sigil;
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 26000, 2.6);
+    this.register(ctx, x, z, 26000, 2.8);
     this.tx = x;
     this.tz = z;
     this.group.position.set(x, 0.6, z);
+
   }
 
   onStep(ctx: BossCtx, step: number, bar: number): void {
@@ -346,10 +404,17 @@ export class Cantor extends Boss {
       if (this.phase === 2) this.radial(ctx, arms, 6, -this.angle * 1.3, 0.45);
     }
     if (step === 0 && bar % 2 === 1) {
-      // teleport somewhere near the player
+      // teleport somewhere near the player, but always inside the nave
       const a = Math.random() * Math.PI * 2;
-      this.tx = ctx.px + Math.cos(a) * 12;
-      this.tz = ctx.pz + Math.sin(a) * 12;
+      let tx = ctx.px + Math.cos(a) * 12;
+      let tz = ctx.pz + Math.sin(a) * 12;
+      const d = Math.hypot(tx, tz);
+      if (d > 24) {
+        tx = (tx / d) * 24;
+        tz = (tz / d) * 24;
+      }
+      this.tx = tx;
+      this.tz = tz;
       ctx.ground.add(GroundKind.Telegraph, this.tx, this.tz, 3, 3, 0.9, this.color, { fixed: true });
     }
     if (step === 0 && bar % 4 === 0) {
@@ -390,13 +455,20 @@ export class Cantor extends Boss {
     this.group.scale.setScalar(0.2 + this.fade * 0.8);
     this.group.rotation.y = Math.atan2(ctx.px - e.x, ctx.pz - e.z);
     const kick = Math.pow(1 - beatPhase, 3);
-    this.halo.rotation.z = time * 0.6;
-    this.halo.scale.setScalar(1 + kick * 0.12);
+    this.crown.rotation.y = time * 0.6;
+    this.crown.scale.setScalar(1 + kick * 0.12);
+    this.sigil.position.x = e.x;
+    this.sigil.position.z = e.z;
+    this.sigil.scale.setScalar(0.3 + this.fade * 0.7);
+    this.sigilMat.uniforms.uTime!.value = time;
+    this.sigilMat.uniforms.uPulse!.value = kick;
+    void this.halo;
     this.hands.forEach((h, i) => {
       h.position.y = 3.4 + Math.sin(time * 2 + i * 2) * 0.6;
     });
     this.bodyMat.uniforms.uTime!.value = time;
     (this.bodyMat.uniforms.uState!.value as THREE.Vector4).x = Math.min(1, e.flash);
+    (this.bodyMat.uniforms.uCamDir!.value as THREE.Vector3).set(0, 0, 1).applyQuaternion(ctx.camQuat);
     for (let i = this.zones.length - 1; i >= 0; i--) {
       const zn = this.zones[i]!;
       zn.life -= dt;
@@ -424,6 +496,7 @@ export class TheHush extends Boss {
   private readonly coronaMat: THREE.ShaderMaterial;
   private readonly bodyMat: THREE.ShaderMaterial;
   private silence = false;
+  private readonly coronaBack = new THREE.Vector3();
   private stunned = 0;
   private laserAngle = 0;
   private spin = 0;
@@ -444,16 +517,21 @@ export class TheHush extends Boss {
         uniform float uTime; uniform float uPulse; uniform vec3 uColor; varying vec2 vUv;
         void main(){
           vec2 q = (vUv - 0.5) * 2.0; float r = length(q); float a = atan(q.y, q.x + 1e-4);
-          float flames = 0.5 + 0.5 * sin(a * 9.0 + uTime * 2.0) * sin(a * 5.0 - uTime * 1.3);
-          float ring = smoothstep(0.62 + flames * 0.25 + uPulse * 0.1, 0.42, r) * smoothstep(0.36, 0.44, r);
-          gl_FragColor = vec4(uColor * ring * (1.6 + uPulse * 2.0), ring);
+          // eclipse: a razor-thin white-hot rim, then streaming coronal flares
+          float rim = smoothstep(0.03, 0.0, abs(r - 0.4)) * (1.5 + uPulse * 2.0);
+          float f1 = pow(max(0.0, sin(a * 7.0 + uTime * 0.8)), 14.0);
+          float f2 = pow(max(0.0, sin(a * 13.0 - uTime * 1.3 + 1.7)), 22.0);
+          float flare = (f1 * 0.6 + f2 * 0.8) * smoothstep(0.8, 0.4, r) * step(0.39, r);
+          float glow = smoothstep(0.75, 0.4, r) * step(0.39, r) * 0.25;
+          float v = rim + flare * (0.9 + uPulse) + glow;
+          gl_FragColor = vec4(uColor * v * 0.85, clamp(v, 0.0, 1.0));
         }`,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
-    this.corona = new THREE.Mesh(new THREE.PlaneGeometry(22, 22), this.coronaMat);
+    this.corona = new THREE.Mesh(new THREE.PlaneGeometry(19, 19), this.coronaMat);
     this.corona.position.y = 4;
     this.group.add(this.corona);
   }
@@ -520,9 +598,13 @@ export class TheHush extends Boss {
     this.coronaMat.uniforms.uPulse!.value = kick + (this.silence ? 0 : 0.2);
     (this.coronaMat.uniforms.uColor!.value as THREE.Color).setHex(this.silence ? 0x6040ff : this.stunned > 0 ? 0xff4040 : 0xfff0d8);
     this.corona.quaternion.copy(ctx.camQuat);
+    // sit the corona behind the body (away from the camera) so the eclipse stays black
+    this.coronaBack.set(0, 0, -1).applyQuaternion(ctx.camQuat).multiplyScalar(-4.5);
+    this.corona.position.set(this.coronaBack.x, 3 + this.coronaBack.y, this.coronaBack.z);
     this.bodyMat.uniforms.uTime!.value = time;
     (this.bodyMat.uniforms.uState!.value as THREE.Vector4).x = Math.min(1, e.flash);
     (this.bodyMat.uniforms.uState!.value as THREE.Vector4).z = this.stunned > 0 ? 0.6 : 0;
+    (this.bodyMat.uniforms.uCamDir!.value as THREE.Vector3).set(0, 0, 1).applyQuaternion(ctx.camQuat);
 
     if (this.phase >= 3 && this.stunned === 0) {
       // four sweeping corona lasers

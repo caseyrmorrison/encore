@@ -68,6 +68,8 @@ uniform vec3 uFloor;
 uniform vec3 uEye;
 uniform vec4 uEyeParams; // y, sep, size, style
 uniform float uTime;
+uniform vec2 uRimShape; // power, strength
+uniform vec3 uCamDir;   // world direction toward the camera
 varying vec3 vN;
 varying vec3 vObj;
 varying vec3 vView;
@@ -79,55 +81,62 @@ float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 4
 void main() {
   vec3 n = normalize(vN);
   float ndv = max(dot(n, vView), 0.0);
-  float fres = pow(1.0 - ndv, 4.5);
+  float fres = pow(1.0 - ndv, uRimShape.x);
   float top = max(n.y, 0.0);
   float bottom = max(-n.y, 0.0);
   // velvet: near-black albedo, a thin coloured sheen at the silhouette, fibre noise
   float fibre = hash(floor(vObj * 70.0)) * 0.012;
   vec3 col = vec3(0.006, 0.004, 0.012) + fibre;
-  col += uRim * fres * 0.6;
-  col += vec3(0.035, 0.03, 0.06) * pow(top, 4.0);
+  col += uRim * fres * uRimShape.y;
+  col += vec3(0.012, 0.01, 0.02) * pow(top, 6.0);
   col += uFloor * bottom * 0.3 * smoothstep(1.0, 0.0, vWorldY);
 
-  // eyes live on the +Z face in object space
+  // eyes are painted on whichever side of the head faces the camera (sprite-style), so the
+  // high top-down camera always sees a face; masked to the head band in object space
   float y = uEyeParams.x;
   float sep = uEyeParams.y;
   float sz = uEyeParams.z;
   float style = uEyeParams.w;
-  float front = smoothstep(0.0, 0.12, vObj.z);
+  vec3 f = normalize(uCamDir);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), f));
+  vec3 upv = cross(f, right);
+  vec2 e = vec2(dot(n, right), dot(n, upv) - 0.08);
+  float headBand = smoothstep(0.45, 0.2, abs(vObj.y - y));
+  float front = smoothstep(0.2, 0.55, dot(n, f)) * headBand;
   float blink = step(0.965, fract(uTime * 0.23 + vState.y * 7.3));
-  vec2 e = vObj.xy - vec2(0.0, y);
   float eye = 0.0;
+  float esep = sep * 1.7;
+  float esz = 0.22;
   if (style < 0.5) {
     float squint = mix(1.0, 7.0, blink);
-    float d1 = length((e - vec2(sep, 0.0)) * vec2(1.0, squint * 0.85));
-    float d2 = length((e + vec2(sep, 0.0)) * vec2(1.0, squint * 0.85));
-    eye = smoothstep(sz, sz * 0.55, min(d1, d2));
+    float d1 = length((e - vec2(esep, 0.0)) * vec2(1.0, squint * 0.8));
+    float d2 = length((e + vec2(esep, 0.0)) * vec2(1.0, squint * 0.8));
+    eye = smoothstep(esz, esz * 0.6, min(d1, d2));
   } else if (style < 1.5) {
-    float band = smoothstep(sz, sz * 0.6, abs(e.y)) * step(abs(e.x), sep);
-    float glint = smoothstep(0.04, 0.0, abs(e.x - sep * 0.4 + sin(uTime * 2.0 + vState.y * 9.0) * sep * 0.5));
+    float band = smoothstep(0.1, 0.05, abs(e.y)) * step(abs(e.x), 0.55);
+    float glint = smoothstep(0.06, 0.0, abs(e.x - 0.2 + sin(uTime * 2.0 + vState.y * 9.0) * 0.3));
     eye = band * (0.55 + glint * 1.5);
   } else if (style < 2.5) {
     float d = length(e * vec2(1.0, mix(1.0, 8.0, blink)));
-    float iris = smoothstep(sz, sz * 0.8, d) - smoothstep(sz * 0.45, sz * 0.3, d) * 0.7;
-    eye = iris;
+    eye = smoothstep(0.24, 0.19, d) - smoothstep(0.11, 0.07, d) * 0.7;
   } else {
-    float s1 = smoothstep(sz, sz * 0.4, abs(e.y)) * smoothstep(sep + 0.09, sep, abs(abs(e.x) - sep * 0.2) + sep * 0.8);
-    eye = s1 * step(0.03, abs(e.x));
+    // narrow slits
+    float slit = smoothstep(0.05, 0.02, abs(e.y)) * smoothstep(0.1, 0.06, abs(abs(e.x) - esep));
+    eye = slit;
   }
   eye *= front;
   vec3 eyeCol = mix(uEye, vec3(1.0, 0.25, 0.3), vState.w);
-  // glowing eyes with a soft halo so they read from the high camera
-  col = mix(col, eyeCol * 2.4, clamp(eye, 0.0, 1.0));
+  // the eyes are the only bright pixels on a Hush; a hit makes them blaze
+  col = mix(col, eyeCol * (3.2 + vState.x * 3.0), clamp(eye, 0.0, 1.0));
 
   // frozen: icy crust
   col = mix(col, vec3(0.45, 0.8, 1.3) * (0.5 + fres), vState.z * 0.75);
   // elite: molten gold sheen
-  col += vec3(1.4, 0.8, 0.2) * pow(1.0 - ndv, 5.0) * vState.w * 1.3;
+  col += vec3(1.4, 0.8, 0.2) * pow(1.0 - ndv, 9.0) * vState.w * 1.6;
   // hit flash
-  // hit flash: a hot rim + brief body lift, not a solid white blob
-  col = mix(col, vec3(2.2, 2.0, 1.9), vState.x * 0.55);
-  col += vec3(3.0) * fres * vState.x;
+  // hit flash: the velvet edge catches fire, the body barely lifts
+  col += vec3(2.6, 2.4, 2.6) * pow(1.0 - ndv, 2.5) * vState.x;
+  col += vec3(0.08) * vState.x;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -144,6 +153,8 @@ export function makeHushMaterial(look: HushLook, rim: THREE.Color, floor: THREE.
       uEye: { value: new THREE.Color(0xf4f1ff) },
       uEyeParams: { value: new THREE.Vector4(look.eyeY, look.eyeSep, look.eyeSize, look.eyeStyle) },
       uState: { value: new THREE.Vector4(0, 0.5, 0, 0) },
+      uRimShape: { value: new THREE.Vector2(4.5, 0.6) },
+      uCamDir: { value: new THREE.Vector3(0, 0.83, 0.56) },
       uBeatU: { value: 0 },
     },
   });
@@ -170,13 +181,13 @@ function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 }
 
 export function hushLooks(): Record<HushKind, HushLook> {
-  // Mote: round little shusher with a curled tuft
-  const moteBody = new THREE.SphereGeometry(0.5, 24, 18);
-  moteBody.scale(1, 0.92, 1);
-  moteBody.translate(0, 0.5, 0);
-  const tuft = new THREE.ConeGeometry(0.12, 0.35, 10);
-  tuft.rotateZ(-0.5);
-  tuft.translate(0.08, 1.02, 0);
+  // Mote: a round little shusher — soft squashed ball with a curled tuft (reads best from above)
+  const moteBody = new THREE.SphereGeometry(0.5, 28, 20);
+  moteBody.scale(1, 0.9, 1);
+  moteBody.translate(0, 0.48, 0);
+  const tuft = new THREE.ConeGeometry(0.11, 0.34, 10);
+  tuft.rotateZ(-0.6);
+  tuft.translate(0.1, 0.98, 0);
 
   // Mute: hooded robe on a lathe, a cowl pulled forward
   const robe = lathe([
@@ -244,7 +255,7 @@ export function hushLooks(): Record<HushKind, HushLook> {
   wisp.translate(0, 0.6, 0);
 
   return {
-    mote: { geometry: merge([moteBody, tuft]), eyeY: 0.66, eyeSep: 0.19, eyeSize: 0.15, eyeStyle: 0, squash: 0.16, glitch: 0 },
+    mote: { geometry: merge([moteBody, tuft]), eyeY: 0.6, eyeSep: 0.17, eyeSize: 0.13, eyeStyle: 0, squash: 0.16, glitch: 0 },
     mute: { geometry: merge([robe, shoulders]), eyeY: 1.66, eyeSep: 0.18, eyeSize: 0.075, eyeStyle: 3, squash: 0.08, glitch: 0 },
     static: { geometry: merge(shards), eyeY: 1.0, eyeSep: 0, eyeSize: 0.22, eyeStyle: 2, squash: 0.05, glitch: 1 },
     damper: {

@@ -29,6 +29,7 @@ uniform float uBeat;
 uniform float uBar;
 uniform float uEnergy;
 uniform float uDrop;
+uniform float uBuild;
 uniform vec2 uPlayer;
 uniform float uR;
 uniform vec3 uWin[6];
@@ -90,6 +91,7 @@ void main() {
   stone += gold * step1 * 0.08;
   col = mix(stone, col, inside);
   col += gold * smoothstep(0.35, 0.0, abs(r - uR)) * (0.5 + beat * 0.8);
+  col *= 1.0 - uBuild * 0.7;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -165,7 +167,7 @@ export class Cathedral implements Venue {
   readonly progression = 'cathedral' as const;
   readonly bounds: Bounds = { kind: 'circle', r: R };
   readonly palette: VenuePalette = {
-    rim: new THREE.Color(0x4a5a9a),
+    rim: new THREE.Color(0x6a5ac8),
     floor: new THREE.Color(0xffc870),
     accents: [0x6f8bff, 0xffc53d, 0xff5ec8, 0x3dffc5],
     fog: 0x0a0a1a,
@@ -204,6 +206,7 @@ export class Cathedral implements Venue {
         uBar: { value: 0 },
         uEnergy: { value: 0 },
         uDrop: { value: 0 },
+        uBuild: { value: 0 },
         uPlayer: { value: new THREE.Vector2() },
         uR: { value: R },
         uWin: { value: this.winCols },
@@ -360,6 +363,7 @@ export class Cathedral implements Venue {
     u.uBeat!.value = f.beatPhase;
     u.uEnergy!.value = f.energy;
     u.uDrop!.value = f.drop ? 1 : 0;
+    u.uBuild!.value = f.build;
     (u.uPlayer!.value as THREE.Vector2).set(f.playerX, f.playerZ);
     const beat = Math.pow(1 - f.beatPhase, 3);
     for (let i = 0; i < 6; i++) {

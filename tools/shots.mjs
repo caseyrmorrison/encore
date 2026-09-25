@@ -80,6 +80,28 @@ const start = async () => {
 };
 
 const S = {
+  async mix() {
+    const rep = await E(() => window.__encore.mix());
+    for (const [k, v] of Object.entries(rep)) console.log(k.padEnd(10), 'peak', String(v.peak).padStart(6), 'rms', String(v.rms).padStart(6));
+  },
+  async bot() {
+    const mins = Number(opt('mins', '4'));
+    await start();
+    await E(() => window.__encore.bot(true));
+    const t0 = Date.now();
+    let n = 0;
+    while (Date.now() - t0 < mins * 60000) {
+      await sleep(20000);
+      n++;
+      const info = await E(() => ({ st: window.__encore.state(), run: window.__encore.runInfo() }));
+      console.log(`[${n * 20}s]`, JSON.stringify(info));
+      if (n % 3 === 0) await shot(`bot-${n * 20}s`);
+      if (info.st === 'results' || info.st === 'title') break;
+    }
+    const log = await E(() => window.__encore.botLog());
+    console.log('log', JSON.stringify(log.filter((_, i) => i % 10 === 0)));
+    console.log('fps', await fps());
+  },
   async title() {
     await sleep(800);
     await shot('title-press');
@@ -100,6 +122,7 @@ const S = {
     await E(() => {
       const d = window.__encore;
       d.god();
+      d.bot(true);
       d.skip(110);
       d.spawn('mote', 60);
       d.spawn('static', 20);
@@ -129,6 +152,7 @@ const S = {
     await E(() => {
       const d = window.__encore;
       d.god();
+      d.bot(true);
       for (const i of ['hat', 'bass', 'lead', 'clap', 'tom', 'scratch', 'crash']) d.give(i);
       d.skip(90);
       d.spawn('mote', 80);
@@ -150,10 +174,21 @@ const S = {
     });
     await sleep(600);
     await page.keyboard.press('KeyQ');
-    await sleep(2600);
+    const until = async (fn, ms = 8000) => {
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) {
+        if (await E(fn)) return true;
+        await sleep(30);
+      }
+      return false;
+    };
+    await until(() => window.__encore.game.buildT > 0.55);
     await shot('drop-build');
-    await sleep(500);
+    await until(() => window.__encore.game.dropState === 'active');
+    await sleep(120);
     await shot('drop');
+    await sleep(1100);
+    await shot('drop-mid');
   },
   async boss() {
     await start();
@@ -167,6 +202,39 @@ const S = {
     });
     await dance(5000);
     await shot('boss');
+  },
+  async boss2() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      d.god();
+      d.venue(1);
+      d.give('hat');
+      d.give('bass');
+      d.skip(999);
+    });
+    await dance(6000);
+    await shot('boss2');
+  },
+  async boss3() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      d.god();
+      d.venue(2);
+      d.give('hat');
+      d.give('lead');
+      d.skip(999);
+    });
+    await dance(6000);
+    await shot('boss3');
+    // push into the silence phase
+    await E(() => {
+      const g = window.__encore.game;
+      if (g.boss?.entry) g.boss.entry.hp = g.boss.entry.maxHp * 0.6;
+    });
+    await dance(4000);
+    await shot('boss3-silence');
   },
   async cathedral() {
     await start();
