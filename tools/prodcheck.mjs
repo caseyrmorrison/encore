@@ -1,0 +1,15 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const logs = [];
+page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
+page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+await page.goto('http://localhost:5311/', { waitUntil: 'networkidle' });
+await page.waitForTimeout(2500);
+await page.mouse.click(720, 450);
+await page.waitForTimeout(1500);
+await page.keyboard.press('Enter');
+await page.waitForTimeout(4000);
+await page.screenshot({ path: process.argv[2] });
+console.log(logs.filter((l) => !l.includes('toNonIndexed')).join('\n') || 'no console output');
+await browser.close();

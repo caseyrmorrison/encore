@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#07050d" />
+    <meta name="description" content="ENCORE — a rhythm roguelite where your weapons are a drum machine. Compose your way to absurd power." />
+    <meta property="og:title" content="ENCORE — a rhythm roguelite" />
+    <meta property="og:description" content="Your weapons are a drum machine. Every note fires on the beat. Break the game with rhythm." />
+    <meta property="og:image" content="./og.png" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>ENCORE</title>
+  </head>
+  <body>
+    <canvas id="stage" aria-label="ENCORE game view"></canvas>
+    <div id="ui"></div>
+    <div id="boot" class="boot">
+      <div class="boot-logo">ENCORE</div>
+      <div class="boot-sub">tuning the instruments…</div>
+      <div class="boot-bar"><i></i></div>
+    </div>
+    <noscript><p class="nojs">ENCORE needs JavaScript and WebGL to play.</p></noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
