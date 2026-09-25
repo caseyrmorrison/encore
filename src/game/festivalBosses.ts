@@ -448,7 +448,7 @@ export class Mirage extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 26000, 3);
+    this.register(ctx, x, z, 36000, 3);
     this.group.position.set(x, 0, z);
     this.split(ctx, 2);
   }
@@ -689,7 +689,8 @@ export class Algorithm extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 22000, 3.6);
+    // the tour's last boss: a strong build (~150k DPS) should still get a real fight
+    this.register(ctx, x, z, 44000, 3.6);
     this.group.position.set(x, 0, z);
   }
 
