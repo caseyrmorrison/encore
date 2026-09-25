@@ -46,14 +46,15 @@ void main() {
   float veins = fbm(w * 0.16 + fbm(w * 0.32) * 2.6);
   float vein = smoothstep(0.018, 0.0, abs(veins - 0.52));
   float vein2 = smoothstep(0.01, 0.0, abs(fbm(w * 0.4 + 7.0) - 0.5)) * 0.5;
-  vec3 marble = mix(vec3(0.045, 0.045, 0.07), vec3(0.085, 0.082, 0.11), fbm(w * 0.5));
-  marble += (vein + vein2) * vec3(0.32, 0.28, 0.2);
+  // (linear values: 0.015 reads as deep slate once gamma-encoded)
+  vec3 marble = mix(vec3(0.011, 0.012, 0.02), vec3(0.024, 0.024, 0.034), fbm(w * 0.5));
+  marble += (vein + vein2) * vec3(0.1, 0.085, 0.06);
   // big slab joints
   vec2 slab = abs(fract(w / 6.0) - 0.5);
   float joint = smoothstep(0.485, 0.5, max(slab.x, slab.y));
   marble *= 1.0 - joint * 0.5;
   // polished floor catches a soft cold reflection toward the camera
-  marble += vec3(0.03, 0.035, 0.06) * smoothstep(40.0, 0.0, abs(w.y - uPlayer.y + 12.0));
+  marble += vec3(0.008, 0.01, 0.02) * smoothstep(40.0, 0.0, abs(w.y - uPlayer.y + 12.0));
 
   // gold inlay: rose window at the centre and concentric bands
   // distance to the nearest concentric band (every 7.5 units)
@@ -72,7 +73,7 @@ void main() {
     // leaded-glass pattern inside the pool
     vec2 g = d * 3.0;
     float lead = smoothstep(0.1, 0.0, min(abs(fract(g.x) - 0.5), abs(fract(g.y + g.x * 0.5) - 0.5)));
-    col += uWin[i] * pool * (0.75 - lead * 0.5) * uPools[i].w;
+    col += uWin[i] * uWin[i] * pool * (0.9 - lead * 0.6) * uPools[i].w;
   }
 
   // the choir of light: rings pulse outward from the centre on the beat

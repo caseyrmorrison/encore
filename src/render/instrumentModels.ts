@@ -822,3 +822,343 @@ export function noteGeometry(): THREE.BufferGeometry {
   merged.computeVertexNormals();
   return merged;
 }
+
+/** Touring PA stack: flight-case base, tolex cabinets with woofers + horn, metal corners. */
+export function buildSpeakerStack(cabs = 3, accent = 0x2ee6ff): THREE.Group {
+  const g = new THREE.Group();
+  const tolex = new THREE.MeshStandardMaterial({ color: 0x151318, roughness: 0.7, metalness: 0.05 });
+  const grille = new THREE.MeshStandardMaterial({ color: 0x0b0a0d, roughness: 0.95 });
+  const corner = M.darkChrome();
+  const caseMat = new THREE.MeshStandardMaterial({ color: 0x2b2a30, roughness: 0.45, metalness: 0.4 });
+  const base = mesh(new THREE.BoxGeometry(2.6, 0.5, 1.9), caseMat);
+  base.position.y = 0.25;
+  g.add(base);
+  for (const x of [-1.1, 1.1]) {
+    const wheel = mesh(cyl(0.16, 0.12, 12), M.rubber());
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(x, 0.12, 0.8);
+    g.add(wheel);
+  }
+  const coneGeo = new THREE.CircleGeometry(0.42, 24);
+  const capGeo = new THREE.CircleGeometry(0.13, 16);
+  const ringGeo = new THREE.TorusGeometry(0.44, 0.035, 6, 28);
+  for (let c = 0; c < cabs; c++) {
+    const y = 0.5 + 0.8 + c * 1.62;
+    const cab = mesh(new THREE.BoxGeometry(2.4, 1.56, 1.7), tolex);
+    cab.position.y = y;
+    g.add(cab);
+    const face = mesh(new THREE.PlaneGeometry(2.2, 1.38), grille);
+    face.position.set(0, y, 0.851);
+    g.add(face);
+    for (const x of [-0.55, 0.55]) {
+      const cone = mesh(coneGeo, M.rubber());
+      cone.position.set(x, y - 0.12, 0.856);
+      g.add(cone);
+      const cap = mesh(capGeo, M.darkChrome());
+      cap.position.set(x, y - 0.12, 0.858);
+      g.add(cap);
+      const ring = mesh(ringGeo, M.glow(accent, 1.8));
+      ring.position.set(x, y - 0.12, 0.86);
+      g.add(ring);
+    }
+    const horn = mesh(new THREE.BoxGeometry(0.9, 0.22, 0.05), M.darkChrome());
+    horn.position.set(0, y + 0.52, 0.86);
+    g.add(horn);
+    for (const sx of [-1.18, 1.18])
+      for (const sy of [-0.76, 0.76]) {
+        const k = mesh(new THREE.BoxGeometry(0.14, 0.14, 1.74), corner);
+        k.position.set(sx, y + sy, 0);
+        g.add(k);
+      }
+  }
+  return g;
+}
+
+/* ───────────────────────── gear / pedal props (card art) ───────────────────────── */
+
+function labelTex(lines: string[], bg: string, fg: string, w = 512, h = 320): THREE.CanvasTexture {
+  return canvasTexture(w, h, (g) => {
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = fg;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    lines.forEach((l, i) => {
+      g.font = i === 0 ? `${Math.round(h * 0.26)}px Bungee, Impact, sans-serif` : `600 ${Math.round(h * 0.11)}px "Space Grotesk", sans-serif`;
+      g.fillText(l, w / 2, h * (lines.length === 1 ? 0.5 : 0.36 + i * 0.3));
+    });
+  });
+}
+
+function stompbox(color: number, knobs: number, extra?: (g: THREE.Group) => void): THREE.Group {
+  const g = buildPedal(color);
+  // buildPedal already has 3 knobs; hide extras when fewer are wanted
+  let seen = 0;
+  g.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.geometry instanceof THREE.CylinderGeometry && o.position.y > 0.6) {
+      seen++;
+      if (seen > knobs) o.visible = false;
+    }
+  });
+  extra?.(g);
+  return g;
+}
+
+export function buildGear(id: string, color: number): THREE.Group {
+  const g = new THREE.Group();
+  switch (id) {
+    case 'fuzz': {
+      const body = mesh(cyl(1.05, 0.5, 48), M.shell(color));
+      body.rotation.x = Math.PI / 2;
+      g.add(body);
+      const plate = mesh(cyl(0.9, 0.05, 48), M.chrome());
+      plate.rotation.x = Math.PI / 2;
+      plate.position.z = 0.27;
+      g.add(plate);
+      for (const x of [-0.38, 0.38]) {
+        const k = mesh(cyl(0.18, 0.18, 20), M.rubber());
+        k.rotation.x = Math.PI / 2;
+        k.position.set(x, 0.35, 0.35);
+        g.add(k);
+      }
+      const sw = mesh(cyl(0.2, 0.2, 20), M.chrome());
+      sw.rotation.x = Math.PI / 2;
+      sw.position.set(0, -0.35, 0.36);
+      g.add(sw);
+      g.rotation.set(-0.5, 0.3, 0);
+      return g;
+    }
+    case 'metronome': {
+      const geo = new THREE.CylinderGeometry(0.25, 1.0, 2.2, 4, 1);
+      geo.rotateY(Math.PI / 4);
+      const body = mesh(geo, M.darkWood());
+      g.add(body);
+      const face = mesh(new THREE.PlaneGeometry(0.6, 1.4), M.ivory());
+      face.position.set(0, -0.1, 0.52);
+      face.rotation.x = -0.22;
+      g.add(face);
+      const rod = mesh(cyl(0.03, 1.9, 8), M.chrome());
+      rod.position.set(0.2, 0.1, 0.62);
+      rod.rotation.z = -0.35;
+      g.add(rod);
+      const weight = mesh(new THREE.BoxGeometry(0.22, 0.2, 0.12), M.gold());
+      weight.position.set(0.38, 0.55, 0.64);
+      weight.rotation.z = -0.35;
+      g.add(weight);
+      g.rotation.set(0.1, 0.35, 0);
+      return g;
+    }
+    case 'clicktrack': {
+      const band = mesh(new THREE.TorusGeometry(1.0, 0.1, 12, 40, Math.PI), M.rubber());
+      g.add(band);
+      for (const x of [-1, 1]) {
+        const cup = mesh(cyl(0.42, 0.34, 32), M.shell(color));
+        cup.rotation.z = Math.PI / 2;
+        cup.position.set(x, -0.1, 0);
+        g.add(cup);
+        const pad = mesh(new THREE.TorusGeometry(0.34, 0.1, 10, 28), M.rubber());
+        pad.rotation.y = Math.PI / 2;
+        pad.position.set(x * 0.8, -0.1, 0);
+        g.add(pad);
+        const led = mesh(new THREE.CircleGeometry(0.18, 20), M.glow(color, 3));
+        led.rotation.y = x * Math.PI / 2;
+        led.position.set(x * 1.18, -0.1, 0);
+        g.add(led);
+      }
+      g.rotation.set(0.25, -0.5, 0);
+      return g;
+    }
+    case 'wah': {
+      const base = mesh(new THREE.BoxGeometry(1.1, 0.35, 2.3), M.darkChrome());
+      g.add(base);
+      const treadle = mesh(new THREE.BoxGeometry(1.0, 0.12, 2.0), M.shell(color));
+      treadle.position.set(0, 0.35, 0.05);
+      treadle.rotation.x = -0.22;
+      g.add(treadle);
+      const grip = mesh(new THREE.BoxGeometry(0.9, 0.04, 1.6), M.rubber());
+      grip.position.set(0, 0.43, 0.05);
+      grip.rotation.x = -0.22;
+      g.add(grip);
+      g.rotation.set(0.7, 0.45, 0);
+      return g;
+    }
+    case 'looper': {
+      const p = stompbox(color, 1);
+      const ring = mesh(new THREE.TorusGeometry(0.42, 0.06, 10, 40), M.glow(0x9fb8ff, 3.5));
+      ring.position.set(0, -0.55, 0.36);
+      p.add(ring);
+      const big = mesh(cyl(0.34, 0.2, 32), M.chrome());
+      big.rotation.x = Math.PI / 2;
+      big.position.set(0, -0.55, 0.36);
+      p.add(big);
+      return p;
+    }
+    case 'groupies': {
+      const card = mesh(new THREE.BoxGeometry(1.4, 2.0, 0.05), new THREE.MeshStandardMaterial({ map: labelTex(['ALL', 'ACCESS', '★ ENCORE ★'], '#ff2d78', '#ffffff', 320, 460), roughness: 0.4 }));
+      g.add(card);
+      const hole = mesh(new THREE.BoxGeometry(0.4, 0.08, 0.07), M.rubber());
+      hole.position.y = 0.85;
+      g.add(hole);
+      const lanyard = mesh(new THREE.TorusGeometry(0.9, 0.05, 6, 32, Math.PI), M.shell(0x1a1a2a));
+      lanyard.position.y = 0.9;
+      g.add(lanyard);
+      g.rotation.set(-0.1, 0.35, 0.12);
+      return g;
+    }
+    case 'roadie': {
+      const box = mesh(new THREE.BoxGeometry(2.2, 1.4, 1.3), new THREE.MeshStandardMaterial({ color: 0x1e1e24, roughness: 0.5, metalness: 0.2 }));
+      g.add(box);
+      for (const x of [-1.08, 1.08])
+        for (const y of [-0.68, 0.68])
+          for (const z of [-0.63, 0.63]) {
+            const c = mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), M.chrome());
+            c.position.set(x, y, z);
+            g.add(c);
+          }
+      const handle = mesh(new THREE.TorusGeometry(0.3, 0.05, 8, 20, Math.PI), M.chrome());
+      handle.position.set(0, 0.72, 0);
+      g.add(handle);
+      const stripe = mesh(new THREE.BoxGeometry(2.21, 0.12, 1.31), M.shell(color));
+      g.add(stripe);
+      g.rotation.set(0.4, -0.5, 0);
+      return g;
+    }
+    case 'energy': {
+      const can = mesh(cyl(0.55, 2.0, 40), new THREE.MeshStandardMaterial({ map: labelTex(['VOLT', 'SUGAR FREE · MAX HYPE'], '#12301f', '#3dffc5', 512, 256), metalness: 0.7, roughness: 0.3 }));
+      g.add(can);
+      const top = mesh(cyl(0.5, 0.06, 40), M.chrome());
+      top.position.y = 1.02;
+      g.add(top);
+      const bolt = buildBolt(color);
+      bolt.scale.setScalar(0.35);
+      bolt.position.set(0, 0, 0.6);
+      bolt.rotation.set(0, 0, 0);
+      g.add(bolt);
+      g.rotation.set(0.25, 0.4, -0.12);
+      return g;
+    }
+    case 'stagedive': {
+      for (const [x, r] of [
+        [-0.55, 0.25],
+        [0.55, -0.25],
+      ] as const) {
+        const h = buildGloveHand();
+        h.position.set(x, 0, 0);
+        h.rotation.z = r;
+        g.add(h);
+      }
+      const star = mesh(new THREE.OctahedronGeometry(0.28), M.glow(color, 3));
+      star.position.set(0, 1.25, 0);
+      g.add(star);
+      g.rotation.set(-0.2, 0.2, 0);
+      return g;
+    }
+    case 'hypeman': {
+      const horn = mesh(new THREE.CylinderGeometry(0.95, 0.2, 1.8, 32, 1, true), M.shell(color));
+      horn.rotation.z = Math.PI / 2;
+      g.add(horn);
+      const inside = mesh(new THREE.CylinderGeometry(0.9, 0.18, 1.75, 32, 1, true), new THREE.MeshStandardMaterial({ color: 0x111111, side: THREE.BackSide }));
+      inside.rotation.z = Math.PI / 2;
+      g.add(inside);
+      const bell = mesh(new THREE.TorusGeometry(0.95, 0.07, 10, 40), M.chrome());
+      bell.rotation.y = Math.PI / 2;
+      bell.position.x = -0.9;
+      g.add(bell);
+      const grip = mesh(new THREE.BoxGeometry(0.22, 0.8, 0.22), M.rubber());
+      grip.position.set(0.4, -0.55, 0);
+      g.add(grip);
+      g.rotation.set(0.2, 0.9, 0.15);
+      return g;
+    }
+    case 'ampstack': {
+      const combo = mesh(new THREE.BoxGeometry(2.2, 1.7, 1.0), new THREE.MeshStandardMaterial({ color: 0x151318, roughness: 0.7 }));
+      g.add(combo);
+      const grille = mesh(new THREE.PlaneGeometry(1.9, 1.05), new THREE.MeshStandardMaterial({ color: 0x3a3228, roughness: 0.95 }));
+      grille.position.set(0, -0.2, 0.51);
+      g.add(grille);
+      const panel = mesh(new THREE.BoxGeometry(2.0, 0.3, 0.05), M.gold());
+      panel.position.set(0, 0.62, 0.51);
+      g.add(panel);
+      for (let i = 0; i < 5; i++) {
+        const k = mesh(cyl(0.07, 0.08, 12), M.rubber());
+        k.rotation.x = Math.PI / 2;
+        k.position.set(-0.7 + i * 0.35, 0.62, 0.56);
+        g.add(k);
+      }
+      const handle = mesh(new THREE.TorusGeometry(0.35, 0.06, 8, 20, Math.PI), M.rubber());
+      handle.position.y = 0.88;
+      g.add(handle);
+      const pilot = mesh(new THREE.SphereGeometry(0.07, 8, 6), M.glow(0xff2020, 4));
+      pilot.position.set(0.88, 0.62, 0.56);
+      g.add(pilot);
+      g.rotation.set(0.25, -0.45, 0);
+      return g;
+    }
+    case 'encore': {
+      const t = mesh(new THREE.BoxGeometry(2.3, 1.1, 0.05), new THREE.MeshStandardMaterial({ map: labelTex(['ENCORE', 'ADMIT ONE · AGAIN'], '#ffc53d', '#3a1d00', 512, 256), metalness: 0.6, roughness: 0.3 }));
+      g.add(t);
+      const star = mesh(new THREE.OctahedronGeometry(0.3), M.glow(0xfff1b8, 3));
+      star.position.set(0.95, 0.4, 0.1);
+      g.add(star);
+      g.rotation.set(-0.35, 0.4, 0.2);
+      return g;
+    }
+    case 'goldchain': {
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2;
+        const link = mesh(new THREE.TorusGeometry(0.16, 0.05, 8, 16), M.gold());
+        link.position.set(Math.cos(a) * 0.95, Math.sin(a) * 0.95, 0);
+        link.rotation.set(i % 2 ? Math.PI / 2 : 0, 0, a);
+        g.add(link);
+      }
+      const medal = mesh(cyl(0.38, 0.08, 32), M.gold());
+      medal.rotation.x = Math.PI / 2;
+      medal.position.set(0, -1.25, 0.05);
+      g.add(medal);
+      const note = buildNote(0xffc53d);
+      note.scale.setScalar(0.25);
+      note.position.set(0, -1.25, 0.12);
+      g.add(note);
+      g.rotation.set(-0.3, 0.3, 0);
+      return g;
+    }
+    case 'harmonizer': {
+      const stem = mesh(cyl(0.08, 1.2, 12), M.chrome());
+      stem.position.y = -0.9;
+      g.add(stem);
+      const u = mesh(new THREE.TorusGeometry(0.32, 0.08, 10, 24, Math.PI), M.chrome());
+      u.rotation.z = Math.PI;
+      u.position.y = -0.2;
+      g.add(u);
+      for (const x of [-0.32, 0.32]) {
+        const prong = mesh(cyl(0.08, 1.6, 12), M.chrome());
+        prong.position.set(x, 0.6, 0);
+        g.add(prong);
+      }
+      for (let i = 0; i < 3; i++) {
+        const wave = mesh(new THREE.TorusGeometry(0.7 + i * 0.35, 0.025, 6, 40, Math.PI * 0.6), M.glow(color, 2.5));
+        wave.rotation.z = Math.PI * 0.2;
+        wave.position.y = 0.8;
+        g.add(wave);
+      }
+      g.rotation.set(0, 0.2, -0.2);
+      return g;
+    }
+    case 'sustain': {
+      const base = mesh(new THREE.BoxGeometry(1.2, 0.3, 1.8), M.blackPlastic());
+      g.add(base);
+      const lever = mesh(new THREE.BoxGeometry(0.7, 0.1, 1.9), M.chrome());
+      lever.position.set(0, 0.35, 0.2);
+      lever.rotation.x = -0.18;
+      g.add(lever);
+      const cable = mesh(new THREE.TorusGeometry(0.6, 0.05, 6, 24, Math.PI), M.rubber());
+      cable.position.set(0, 0.1, -1.0);
+      cable.rotation.y = Math.PI / 2;
+      g.add(cable);
+      g.rotation.set(0.75, 0.5, 0);
+      return g;
+    }
+    default:
+      return buildPedal(color);
+  }
+}

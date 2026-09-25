@@ -5,6 +5,7 @@ import { buildInstrument } from '../render/instrumentModels';
 import { M } from '../render/materials';
 
 interface Member {
+  intro: number;
   inst: InstrumentId;
   root: THREE.Group;
   model: THREE.Group;
@@ -38,10 +39,13 @@ export class Band {
     for (const { inst, evolved } of insts) {
       if (this.members.some((m) => m.inst === inst)) continue;
       const root = new THREE.Group();
-      const model = buildInstrument(inst);
-      const box = new THREE.Box3().setFromObject(model);
+      const inner = buildInstrument(inst);
+      const box = new THREE.Box3().setFromObject(inner);
       const size = box.getSize(new THREE.Vector3()).length();
-      model.scale.multiplyScalar((evolved ? 1.35 : 1) * (2.1 / size));
+      inner.scale.multiplyScalar((evolved ? 1.35 : 1) * (2.1 / size));
+      // animate a wrapper so each model keeps its authored tilt
+      const model = new THREE.Group();
+      model.add(inner);
       root.add(model);
       const halo = new THREE.Mesh(
         this.haloGeo,
@@ -64,8 +68,14 @@ export class Band {
         root.add(crown);
       }
       this.group.add(root);
-      this.members.push({ inst, root, model, halo, bump: 0, x: 0, z: 0, evolved });
+      this.members.push({ inst, root, model, halo, bump: 0, x: 0, z: 0, evolved, intro: 0 });
     }
+  }
+
+  /** Drop a member in from above (after a draft adds them). */
+  introduce(inst: InstrumentId): void {
+    const m = this.members.find((q) => q.inst === inst);
+    if (m) m.intro = 1;
   }
 
   hit(inst: InstrumentId, strength = 1): void {
@@ -88,10 +98,13 @@ export class Band {
       m.z = pz + Math.sin(a) * radius;
       m.bump = Math.max(0, m.bump - dt * 5);
       const b = m.bump;
-      m.root.position.set(m.x, 2.0 + Math.sin(time * 2 + i) * 0.15 + b * 0.5, m.z);
-      m.root.scale.setScalar(1 + b * 0.35);
+      m.intro = Math.max(0, m.intro - dt * 1.6);
+      const fall = m.intro * m.intro * 16;
+      m.root.position.set(m.x, 2.0 + Math.sin(time * 2 + i) * 0.15 + b * 0.5 + fall, m.z);
+      m.root.scale.setScalar((1 + b * 0.35) * (1 + m.intro * 0.8));
+      m.model.rotation.x = m.intro * 6;
       m.model.rotation.y = -a + Math.PI / 2 + Math.sin(time + i) * 0.2;
-      (m.halo.material as THREE.MeshBasicMaterial).opacity = 0.25 + b * 0.6;
+      (m.halo.material as THREE.MeshBasicMaterial).opacity = (m.evolved ? 0.14 : 0.22) + b * 0.55;
       m.halo.scale.setScalar(1 + b * 0.8);
     });
   }

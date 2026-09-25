@@ -108,9 +108,15 @@ void main() {
   float esep = sep * 1.7;
   float esz = 0.22;
   if (style < 0.5) {
-    float squint = mix(1.0, 7.0, blink);
-    float d1 = length((e - vec2(esep, 0.0)) * vec2(1.0, squint * 0.8));
-    float d2 = length((e + vec2(esep, 0.0)) * vec2(1.0, squint * 0.8));
+    // slanted, narrowed eyes: menace instead of cute
+    float squint = mix(1.7, 7.0, blink);
+    vec2 a1 = e - vec2(esep, 0.0);
+    vec2 a2 = e + vec2(esep, 0.0);
+    float cs = cos(0.42), sn = sin(0.42);
+    a1 = vec2(cs * a1.x - sn * a1.y, sn * a1.x + cs * a1.y);
+    a2 = vec2(cs * a2.x + sn * a2.y, -sn * a2.x + cs * a2.y);
+    float d1 = length(a1 * vec2(1.0, squint));
+    float d2 = length(a2 * vec2(1.0, squint));
     eye = smoothstep(esz, esz * 0.6, min(d1, d2));
   } else if (style < 1.5) {
     float band = smoothstep(0.1, 0.05, abs(e.y)) * step(abs(e.x), 0.55);
@@ -119,15 +125,30 @@ void main() {
   } else if (style < 2.5) {
     float d = length(e * vec2(1.0, mix(1.0, 8.0, blink)));
     eye = smoothstep(0.24, 0.19, d) - smoothstep(0.11, 0.07, d) * 0.7;
-  } else {
+  } else if (style < 3.5) {
     // narrow slits
     float slit = smoothstep(0.05, 0.02, abs(e.y)) * smoothstep(0.1, 0.06, abs(abs(e.x) - esep));
     eye = slit;
+  } else if (style < 4.5) {
+    // slits + a round, open, singing mouth
+    float slit = smoothstep(0.045, 0.02, abs(e.y - 0.08)) * smoothstep(0.09, 0.05, abs(abs(e.x) - esep));
+    float m = length((e - vec2(0.0, -0.2)) * vec2(1.0, 0.8));
+    float mouth = smoothstep(0.13, 0.1, m) - smoothstep(0.07, 0.05, m) * 0.6;
+    eye = max(slit, mouth * (0.7 + 0.3 * sin(uTime * 9.0)));
+  } else {
+    // thin crescents, like a smile that isn't one
+    vec2 c1 = e - vec2(esep, 0.0);
+    vec2 c2 = e + vec2(esep, 0.0);
+    float r1 = length(c1 * vec2(1.0, 1.5));
+    float r2 = length(c2 * vec2(1.0, 1.5));
+    float cr1 = smoothstep(esz, esz * 0.8, r1) * (1.0 - smoothstep(esz * 0.8, esz * 0.6, length((c1 - vec2(0.0, 0.05)) * vec2(1.0, 1.5))));
+    float cr2 = smoothstep(esz, esz * 0.8, r2) * (1.0 - smoothstep(esz * 0.8, esz * 0.6, length((c2 - vec2(0.0, 0.05)) * vec2(1.0, 1.5))));
+    eye = max(cr1, cr2);
   }
   eye *= front;
   vec3 eyeCol = mix(uEye, vec3(1.0, 0.25, 0.3), vState.w);
   // the eyes are the only bright pixels on a Hush; a hit makes them blaze
-  col = mix(col, eyeCol * (3.2 + vState.x * 3.0), clamp(eye, 0.0, 1.0));
+  col = mix(col, eyeCol * (1.9 + vState.x * 3.0), clamp(eye, 0.0, 1.0));
 
   // frozen: icy crust
   col = mix(col, vec3(0.45, 0.8, 1.3) * (0.5 + fres), vState.z * 0.75);

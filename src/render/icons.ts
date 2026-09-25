@@ -3,11 +3,11 @@ import { INSTRUMENT_IDS, type InstrumentId } from '../seq/instruments';
 import { PEDALS, PEDAL_IDS, type PedalId } from '../seq/cards';
 import {
   buildBolt,
+  buildGear,
   buildChevrons,
   buildHeart,
   buildInstrument,
   buildNote,
-  buildPedal,
   buildPicks,
   buildRecord,
   buildRings,
@@ -59,7 +59,7 @@ export class IconFactory {
   }
 
   pedal(id: PedalId): string {
-    return this.get(`p:${id}`, () => buildPedal(PEDALS[id].color));
+    return this.get(`p:${id}`, () => buildGear(id, PEDALS[id].color));
   }
 
   note(color: number): string {

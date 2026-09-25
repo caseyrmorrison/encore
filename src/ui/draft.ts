@@ -107,6 +107,7 @@ export class DraftScreen {
         },
         [
           h('div', { class: 'card-key', text: String(i + 1) }),
+          h('div', { class: 'card-rarity', text: view.rarity }),
           h('div', { class: 'card-kicker', text: view.kicker }),
           h('div', { class: 'card-art' }, [h('img', { src: view.icon, alt: '' })]),
           h('div', { class: 'card-title', text: view.title }),

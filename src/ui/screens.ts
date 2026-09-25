@@ -2,6 +2,7 @@ import { formatInt, formatTime } from '../core/math';
 import type { SaveData, Settings } from '../core/save';
 import { GROOVES, GROOVE_IDS } from '../seq/grooves';
 import { INSTRUMENTS, INSTRUMENT_IDS, RARITY_COLOR, type InstrumentId } from '../seq/instruments';
+import { SETLISTS, type SetlistId } from '../seq/setlists';
 import type { IconFactory } from '../render/icons';
 import { clear, h, show } from './dom';
 
@@ -23,6 +24,7 @@ export interface TitleActions {
   merch(): void;
   howto(): void;
   settings(): void;
+  cycleSetlist(dir: number): void;
 }
 
 export class TitleScreen {
@@ -31,6 +33,9 @@ export class TitleScreen {
   private readonly fans: HTMLElement;
   private readonly press: HTMLElement;
   private readonly menu: HTMLElement;
+  private readonly playSub: HTMLElement;
+  private readonly setName: HTMLElement;
+  private readonly setBlurb: HTMLElement;
   private started = false;
 
   constructor(root: HTMLElement, a: TitleActions) {
@@ -42,8 +47,19 @@ export class TitleScreen {
     dailyBtn.append(this.dailyInfo);
     const merchBtn = button('MERCH TABLE', 'wide', a.merch);
     merchBtn.append(this.fans);
+    const playBtn = button('PLAY', 'wide primary big', a.play);
+    this.playSub = h('span', { class: 'hotkey', text: 'ENTER' });
+    playBtn.append(this.playSub);
+    this.setName = h('div', { class: 'setlist-name' });
+    this.setBlurb = h('div', { class: 'setlist-blurb' });
+    const setlist = h('div', { class: 'setlist' }, [
+      h('button', { class: 'setlist-arrow', type: 'button', text: '◂', aria: { label: 'Previous setlist' }, on: { click: () => a.cycleSetlist(-1) } }),
+      h('div', { class: 'setlist-mid' }, [h('div', { class: 'setlist-kicker', text: 'STARTING SETLIST' }), this.setName, this.setBlurb]),
+      h('button', { class: 'setlist-arrow', type: 'button', text: '▸', aria: { label: 'Next setlist' }, on: { click: () => a.cycleSetlist(1) } }),
+    ]);
     this.menu = h('nav', { class: 'title-menu hidden' }, [
-      button('PLAY', 'wide primary big', a.play, 'ENTER'),
+      setlist,
+      playBtn,
       dailyBtn,
       merchBtn,
       button('HOW TO PLAY', 'wide', a.howto),
@@ -73,7 +89,17 @@ export class TitleScreen {
     return this.started;
   }
 
-  update(save: SaveData, dailyKey: string): void {
+  pulse(beat: number): void {
+    this.press.style.setProperty('--beat', beat.toFixed(3));
+  }
+
+  update(save: SaveData, dailyKey: string, sharedSeed: string | null = null): void {
+    this.playSub.textContent = sharedSeed ? `shared seed ${sharedSeed}` : 'ENTER';
+    const sl = SETLISTS[(save.setlist as SetlistId) in SETLISTS ? (save.setlist as SetlistId) : 'garage'];
+    const open = sl.unlocked(save);
+    this.setName.textContent = open ? sl.name : `🔒 ${sl.name}`;
+    this.setBlurb.textContent = open ? sl.blurb : `Unlock: ${sl.unlockText}`;
+    this.setName.parentElement?.parentElement?.classList.toggle('locked', !open);
     const best = save.dailyBest[dailyKey];
     this.dailyInfo.textContent = best ? `${dailyKey} · best ${formatInt(best)}` : `${dailyKey} · same run for everyone`;
     this.fans.textContent = `${formatInt(save.fans)} fans`;
@@ -259,6 +285,8 @@ export interface ResultStats {
   daily: boolean;
   bestStreak: number;
   loop: number;
+  newBestKills: boolean;
+  newBestHit: boolean;
 }
 
 export class ResultsScreen {
@@ -267,6 +295,8 @@ export class ResultsScreen {
   private readonly title: HTMLElement;
   private readonly sub: HTMLElement;
   private readonly shareBtn: HTMLButtonElement;
+  private readonly hero: HTMLElement;
+  private again!: HTMLButtonElement;
   private shareText = '';
 
   constructor(root: HTMLElement, a: { again(): void; menu(): void; merch(): void }) {
@@ -274,6 +304,7 @@ export class ResultsScreen {
     this.title = h('div', { class: 'results-title' });
     this.sub = h('div', { class: 'results-sub' });
     this.body = h('div', { class: 'results-grid' });
+    this.hero = h('div', { class: 'rhero-v' });
     this.shareBtn = button('COPY RESULT', 'ghost', () => {
       void navigator.clipboard?.writeText(this.shareText).then(
         () => (this.shareBtn.firstChild!.textContent = 'COPIED ✓'),
@@ -284,9 +315,10 @@ export class ResultsScreen {
       h('div', { class: 'panel results-panel' }, [
         this.title,
         this.sub,
+        h('div', { class: 'rhero' }, [this.hero, h('div', { class: 'rhero-l', text: 'FANS EARNED' })]),
         this.body,
         h('div', { class: 'row' }, [
-          button('ENCORE', 'primary big', a.again, 'ENTER'),
+          (this.again = button('PLAY AGAIN', 'primary big', a.again, 'ENTER')),
           button('MERCH TABLE', '', a.merch),
           this.shareBtn,
           button('MENU', 'ghost', a.menu),
@@ -297,24 +329,37 @@ export class ResultsScreen {
   }
 
   open(r: ResultStats): void {
-    this.title.textContent = r.won ? (r.loop > 0 ? `ENCORE ×${r.loop}` : 'ENCORE!') : "SHOW'S OVER";
+    this.title.textContent = r.won ? (r.loop > 0 ? `ENCORE ×${r.loop + 1}` : 'ENCORE!') : "SHOW'S OVER";
+    this.again.firstChild!.textContent = r.won ? 'ENCORE ▸ KEEP YOUR BUILD' : 'PLAY AGAIN';
     this.title.classList.toggle('won', r.won);
     this.sub.textContent = r.won
       ? 'The crowd will not stop screaming.'
       : `The Hush took ${r.venueName}. The crowd wants more.`;
     clear(this.body);
-    const stat = (label: string, value: string, hot = false): HTMLElement =>
-      h('div', { class: `rstat${hot ? ' hot' : ''}` }, [h('div', { class: 'rstat-v', text: value }), h('div', { class: 'rstat-l', text: label })]);
+    this.hero.textContent = '+0';
+    const target = r.fans;
+    const t0 = performance.now();
+    const tick = (): void => {
+      const k = Math.min(1, (performance.now() - t0) / 1400);
+      this.hero.textContent = `+${formatInt(Math.round(target * (1 - Math.pow(1 - k, 3))))}`;
+      if (k < 1 && this.el.isConnected && !this.el.classList.contains('hidden')) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    const stat = (label: string, value: string, hot = false, best = false): HTMLElement =>
+      h('div', { class: `rstat${hot ? ' hot' : ''}` }, [
+        h('div', { class: 'rstat-v' }, [value, best ? h('span', { class: 'rbadge', text: 'NEW BEST' }) : null]),
+        h('div', { class: 'rstat-l', text: label }),
+      ]);
     this.body.append(
+      stat('silenced', formatInt(r.kills), true, r.newBestKills),
+      stat('biggest hit', formatInt(r.bestHit), true, r.newBestHit),
       stat('venues headlined', String(r.venuesCleared)),
-      stat('silenced', formatInt(r.kills), true),
-      stat('biggest hit', formatInt(r.bestHit), true),
       stat('level', String(r.level)),
       stat('best streak', formatInt(r.bestStreak)),
       stat('perfect dashes', formatInt(r.perfects)),
       stat('drops', formatInt(r.drops)),
       stat('time', formatTime(r.time)),
-      stat('fans earned', `+${formatInt(r.fans)}`, true),
+      stat('grooves found', String(r.grooves.length)),
     );
     if (r.grooves.length) {
       this.body.append(
@@ -342,7 +387,10 @@ export class ResultsScreen {
       `ENCORE ${r.daily ? '· Daily Setlist ' : ''}· seed ${r.seedCode}`,
       `${r.won ? '🏆 headlined everything' : `💀 fell at ${r.venueName}`} · ${formatInt(r.kills)} silenced · biggest hit ${formatInt(r.bestHit)}`,
       `grooves: ${r.grooves.map((g) => g.genre).join(', ') || 'none'}`,
-    ].join('\n');
+      r.daily ? '' : `play this seed: ${location.origin}${location.pathname}?seed=${r.seedCode}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
     this.shareBtn.firstChild!.textContent = 'COPY RESULT';
     show(this.el, true);
   }
@@ -397,7 +445,7 @@ export class MerchScreen {
       const owned = save.unlocked.includes(id);
       const cost = UNLOCK_COST[id];
       const afford = cost !== undefined && save.fans >= cost;
-      const item = h('div', { class: `merch-item${owned ? ' owned' : ''}` }, [
+      const item = h('div', { class: `merch-item${owned ? ' owned' : afford ? '' : ' locked'}` }, [
         h('img', { src: this.icons.instrument(id), alt: '' }),
         h('div', { class: 'merch-name', text: d.name.toUpperCase() }),
         h('div', { class: 'merch-desc', text: d.weapon }),

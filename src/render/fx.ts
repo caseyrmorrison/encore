@@ -373,6 +373,9 @@ void main() {
     float wob = sin(ang * 26.0 + vB.x * 60.0) * 0.012 + sin(ang * 7.0 - vB.x * 20.0) * 0.008;
     float d = abs(r - 0.95 - wob);
     a = smoothstep(th, 0.0, d) * 1.4 + smoothstep(th * 5.0, 0.0, d) * 0.35;
+    // the safe gap (the quad is rotated by vB.z, so the gap sits at local angle 0)
+    float gapA = abs(atan(q.y, q.x + 1e-4));
+    a *= smoothstep(0.34, 0.46, gapA);
   } else {
     // crack: jagged radial lines
     float ang = atan(q.y, q.x + 1e-4);

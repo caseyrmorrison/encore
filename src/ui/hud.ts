@@ -90,13 +90,13 @@ export class Hud {
         this.venueName,
         h('div', { class: 'set-bar' }, [this.setFill, h('i', { class: 'set-boss', text: '☠' })]),
         this.setTime,
+        this.bossBar,
       ]),
       h('div', { class: 'hud-tr' }, [
         h('div', { class: 'stat' }, [h('div', { class: 'stat-label', text: 'SILENCED' }), this.kills]),
         h('div', { class: 'stat' }, [h('div', { class: 'stat-label', text: 'TIPS' }), this.tips]),
         this.level,
       ]),
-      this.bossBar,
       this.streak,
       this.banner,
       this.toasts,
@@ -136,6 +136,7 @@ export class Hud {
     this.set('hp', lit, () => {
       this.vu.forEach((s, i) => s.classList.toggle('on', i < lit));
       this.el.classList.toggle('low-hp', hpFrac < 0.3);
+      this.el.classList.toggle('mid-hp', hpFrac >= 0.3 && hpFrac < 0.6);
     });
     this.set('hpt', Math.ceil(run.hp), () => (this.hpText.textContent = `${Math.ceil(run.hp)}`));
     this.set('hype', Math.round(run.hype * 200), () => (this.hypeFill.style.transform = `scaleX(${run.hype})`));
@@ -163,7 +164,9 @@ export class Hud {
     this.set('tips', run.tips, () => (this.tips.textContent = formatInt(run.tips)));
     this.set('lvl', run.level, () => (this.level.textContent = `LV ${run.level}`));
     this.set('xp', Math.round((run.xp / run.xpToNext) * 400), () => {
-      this.xpFill.style.transform = `scaleX(${Math.min(1, run.xp / run.xpToNext)})`;
+      const k = Math.min(1, run.xp / run.xpToNext);
+      this.xpFill.style.transform = `scaleX(${k})`;
+      this.level.style.setProperty('--xp', k.toFixed(3));
     });
 
     // streak
@@ -228,9 +231,33 @@ export class Hud {
     }
   }
 
+  /** Gig-poster stamp slammed onto the screen when a groove is discovered. */
+  stamp(genre: string, name: string, bonus: string, color: string, firstEver: boolean): void {
+    const el = h('div', { class: 'stamp' }, [
+      h('div', {
+        class: 'stamp-kicker',
+        text: name.endsWith('EVOLVED') ? '★ EVOLUTION ★' : firstEver ? 'NEW GENRE UNLOCKED' : 'GROOVE LOCKED IN',
+      }),
+      h('div', { class: 'stamp-genre', text: genre }),
+      h('div', { class: 'stamp-name', text: name }),
+      h('div', { class: 'stamp-bonus', text: bonus }),
+    ]);
+    el.style.setProperty('--g', color);
+    el.style.setProperty('--rot', `${(Math.random() - 0.5) * 10}deg`);
+    show(this.banner, false);
+    this.bannerT = 0;
+    document.body.append(el);
+    setTimeout(() => el.classList.add('out'), 2300);
+    setTimeout(() => el.remove(), 2900);
+  }
+
   /** Giant beat countdown during a build-up. */
-  countdown(n: string): void {
+  countdown(n: string, x?: number, y?: number): void {
     const c = h('div', { class: 'countdown', text: n });
+    if (x !== undefined && y !== undefined) {
+      c.style.setProperty('--x', `${x}px`);
+      c.style.setProperty('--y', `${Math.max(120, y - 150)}px`);
+    }
     this.el.append(c);
     setTimeout(() => c.remove(), 700);
   }
@@ -245,6 +272,10 @@ export class Hud {
     void this.banner.offsetWidth;
     this.banner.classList.add('pop');
     this.bannerT = seconds;
+  }
+
+  clearToasts(): void {
+    clear(this.toasts);
   }
 
   toast(text: string, color = '#fff'): void {
@@ -281,6 +312,7 @@ export class Hud {
   boss(name: string | null, frac = 0, shielded = false): void {
     this.set('bossOn', name ?? '', () => {
       show(this.bossBar, !!name);
+      this.el.classList.toggle('boss-mode', !!name);
       if (name) this.bossName.textContent = name;
     });
     if (name) {

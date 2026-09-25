@@ -43,8 +43,8 @@ export class PlayerModel {
     this.root.add(this.body);
     this.body.position.y = 1.5;
     this.body.add(this.mic);
-    // head leads, handle trails behind and down
-    this.mic.rotation.x = 1.05;
+    // head leads, handle trails behind and down (≈45° so the grille faces the camera)
+    this.mic.rotation.x = 0.78;
 
     this.coreMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: this.coreColor, emissiveIntensity: 1.6 });
     this.core = new THREE.Mesh(new THREE.SphereGeometry(0.62, 28, 20), this.coreMat);
@@ -98,6 +98,13 @@ export class PlayerModel {
     const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.35, 20), M.chrome());
     plug.position.y = -3.3;
     this.mic.add(plug);
+    // dark outline shell (inverted hull) so the mic never dissolves into bright effects
+    const hull = new THREE.MeshBasicMaterial({ color: 0x050308, side: THREE.BackSide });
+    const headHull = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 16), hull);
+    this.mic.add(headHull);
+    const handleHull = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.38, 2.9, 20), hull);
+    handleHull.position.y = -2.0;
+    this.mic.add(handleHull);
 
     this.light = new THREE.PointLight(0xffd9a0, 40, 14, 1.8);
     this.light.position.y = 2.4;
@@ -131,9 +138,10 @@ export class PlayerModel {
     // hard-edged coloured follow-spot on the floor
     const poolTex = canvasTexture(256, 256, (g, w, h) => {
       const grd = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-      grd.addColorStop(0, 'rgba(255,255,255,0.55)');
-      grd.addColorStop(0.72, 'rgba(255,255,255,0.4)');
-      grd.addColorStop(0.8, 'rgba(255,255,255,0.9)');
+      // signature hot-pink ring: dim interior, bright hard rim
+      grd.addColorStop(0, 'rgba(255,255,255,0.12)');
+      grd.addColorStop(0.7, 'rgba(255,255,255,0.16)');
+      grd.addColorStop(0.78, 'rgba(255,255,255,1)');
       grd.addColorStop(0.84, 'rgba(255,255,255,0.0)');
       grd.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = grd;
@@ -145,9 +153,9 @@ export class PlayerModel {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      opacity: 0.32,
+      opacity: 0.55,
     });
-    this.glowPool = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 5.2), this.poolMat);
+    this.glowPool = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 4.6), this.poolMat);
     this.glowPool.rotation.x = -Math.PI / 2;
     this.glowPool.position.y = 0.03;
     this.root.add(this.glowPool);
@@ -224,7 +232,7 @@ export class PlayerModel {
     this.body.position.y = 1.5 + Math.sin(time * 3) * 0.08 + kick * 0.12;
     this.body.rotation.set(0, facing, 0);
     // lean into movement; the dash stretches the whole mic
-    this.mic.rotation.x = 1.05 + tilt * 0.25 + (dashing ? 0.3 : 0);
+    this.mic.rotation.x = 0.78 + tilt * 0.25 + (dashing ? 0.3 : 0);
     this.mic.rotation.z = Math.sin(time * 2.1) * 0.05;
     this.grille.rotation.y += dt * 0.4;
     const s = 0.95 * (1 + kick * 0.07);
@@ -233,10 +241,10 @@ export class PlayerModel {
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 4);
     const flicker = invuln ? (Math.sin(time * 50) > 0 ? 1 : 0.35) : 1;
     this.coreMat.emissive.copy(this.coreColor).lerp(new THREE.Color(1, 0.1, 0.15), this.hurtFlash);
-    this.coreMat.emissiveIntensity = (1.4 + kick * 2.2 + spectrum[2]! * 1.6) * flicker;
+    this.coreMat.emissiveIntensity = (0.75 + kick * 1.4 + spectrum[2]! * 0.9) * flicker;
     this.light.color.copy(this.coreMat.emissive);
     this.light.intensity = (26 + kick * 30) * flicker;
-    this.poolMat.color.copy(this.coreColor);
+    this.poolMat.color.setHex(0xff2d78);
 
     for (let i = 0; i < this.bars; i++) {
       const a = (i / this.bars) * Math.PI * 2 + time * 0.25;

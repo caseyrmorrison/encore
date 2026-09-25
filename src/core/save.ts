@@ -34,9 +34,11 @@ export interface SaveData {
   settings: Settings;
   dailyBest: Record<string, number>;
   seenTutorial: boolean;
+  setlist: string;
 }
 
 const KEY = 'encore.save.v1';
+const SETLIST_WHITELIST = ['garage', 'rhythm', 'dj', 'drumline', 'choir'];
 const MAX_NUM = 1e15;
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -68,6 +70,7 @@ export function defaultSave(): SaveData {
     settings: { ...DEFAULT_SETTINGS },
     dailyBest: {},
     seenTutorial: false,
+    setlist: 'garage',
   };
 }
 
@@ -102,6 +105,7 @@ export function sanitize(raw: unknown): SaveData {
   d.bestHit = num(r.bestHit, 0, 1e300, 0);
   d.loudness = Math.floor(num(r.loudness, 0, 10, 0));
   d.seenTutorial = bool(r.seenTutorial, false);
+  d.setlist = typeof r.setlist === 'string' && SETLIST_WHITELIST.includes(r.setlist) ? r.setlist : 'garage';
   const s = (r.settings && typeof r.settings === 'object' ? r.settings : {}) as Record<string, unknown>;
   d.settings = {
     master: num(s.master, 0, 1, DEFAULT_SETTINGS.master),

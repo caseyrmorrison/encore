@@ -137,6 +137,71 @@ const S = {
     console.log('fps busy', await fps());
     console.log('prof', JSON.stringify(await E(() => window.__encore.prof())));
   },
+  async evolved() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      const g = d.game;
+      d.god();
+      for (const i of ['hat', 'bass', 'lead', 'clap', 'tom', 'scratch']) d.give(i);
+      for (const t of g.run.pattern.tracks) {
+        t.level = 5;
+        t.evolved = true;
+        t.notes = t.notes.map((_, k) => k % 2 === 0);
+      }
+      g.run.pattern.fx[0].accent = true;
+      g.run.pattern.fx[4].ratchet = 3;
+      g.run.pattern.fx[8].echo = true;
+      g.run.pattern.version++;
+      g.checkGroovesLive();
+      d.skip(120);
+      d.spawn('mote', 120);
+      d.spawn('mute', 30);
+      d.spawn('bouncer', 2);
+    });
+    await dance(4000);
+    await shot('evolved');
+    console.log('fps evolved', await fps());
+    console.log('prof', JSON.stringify(await E(() => window.__encore.prof())));
+    const info = await E(() => window.__encore.runInfo());
+    console.log('info', JSON.stringify({ kills: info.kills, best: info.bestHit, dmg: Math.round(info.damage) }));
+  },
+  async icons() {
+    await page.mouse.click(w / 2, hgt / 2);
+    await sleep(300);
+    await E(() => {
+      const g = window.__encore.game;
+      const ids = ['overdrive','fuzz','metronome','clicktrack','wah','looper','groupies','roadie','energy','stagedive','hypeman','ampstack','encore','goldchain','harmonizer','sustain'];
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:0;z-index:99;background:#0d0918;display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:20px;';
+      for (const id of ids) {
+        const cell = document.createElement('div');
+        cell.style.cssText = 'display:grid;justify-items:center;color:#fff;font:12px monospace;background:#1c1430;border-radius:12px;padding:6px';
+        const img = document.createElement('img');
+        img.src = g.icons.pedal(id);
+        img.style.width = '150px';
+        cell.append(img, id);
+        box.append(cell);
+      }
+      document.body.append(box);
+    });
+    await sleep(500);
+    await shot('icons');
+  },
+  async groove() {
+    await start();
+    await sleep(800);
+    await E(() => {
+      const g = window.__encore.game;
+      const k = g.run.pattern.track('kick');
+      k.notes = new Array(16).fill(false);
+      for (const i of [0, 4, 8, 12]) k.notes[i] = true;
+      g.run.pattern.version++;
+      g.checkGroovesLive();
+    });
+    await sleep(700);
+    await shot('groove-stamp');
+  },
   async draft() {
     await start();
     await sleep(1200);
@@ -254,7 +319,12 @@ const S = {
       window.__encore.venue(2);
     });
     await sleep(800);
-    await E(() => window.__encore.spawn('mote', 40));
+    await E(() => {
+      window.__encore.spawn('mote', 40);
+      const g = window.__encore.game;
+      g.player.x = 22;
+      g.player.z = 8;
+    });
     await dance(5000);
     await shot('mainstage');
     console.log('fps mainstage', await fps());

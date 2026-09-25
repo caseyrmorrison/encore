@@ -270,6 +270,10 @@ export class ProjectileManager {
         continue;
       }
       this.draw(p, dt, glow);
+      if (p.kind !== 'disc') {
+        // a dark halo under every shot keeps it readable on lit floors
+        dark.emit({ x: p.x, y: 0.95, z: p.z, life: dt * 1.05, size: p.radius * 3.6, color: 0x06040a, shape: Shape.Dot, alpha: 0.55 });
+      }
     }
 
     // records

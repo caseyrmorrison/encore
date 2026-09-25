@@ -34,14 +34,15 @@ export class BackstageScreen {
   ) {
     this.title = h('div', { class: 'draft-title' });
     this.sub = h('div', { class: 'draft-sub' });
-    this.tips = h('div', { class: 'tips-count' });
+    this.tips = h('div', { class: 'tips-corner' });
     this.shop = h('div', { class: 'cards shop' });
     this.healBtn = h('button', { class: 'btn', type: 'button', on: { click: () => a.heal() } });
     this.rerollBtn = h('button', { class: 'btn ghost', type: 'button', on: { click: () => a.reroll() } });
     this.nextBtn = h('button', { class: 'btn primary big', type: 'button', on: { click: () => a.next() } });
     this.editorSlot = h('div', { class: 'editor-slot' });
     this.el = h('div', { class: 'overlay backstage hidden', role: 'dialog', aria: { label: 'Backstage' } }, [
-      h('div', { class: 'draft-head' }, [this.title, this.sub, this.tips]),
+      this.tips,
+      h('div', { class: 'draft-head' }, [this.title, this.sub]),
       this.shop,
       h('div', { class: 'draft-actions' }, [this.healBtn, this.rerollBtn, h('div', { class: 'spacer' }), this.nextBtn]),
       this.editorSlot,
@@ -75,6 +76,7 @@ export class BackstageScreen {
           on: { click: () => afford && this.a.buy(i) },
         },
         [
+          h('div', { class: 'card-rarity', text: v.rarity }),
           h('div', { class: 'card-kicker', text: v.kicker }),
           h('div', { class: 'card-art' }, [h('img', { src: v.icon, alt: '' })]),
           h('div', { class: 'card-title', text: v.title }),
@@ -87,8 +89,9 @@ export class BackstageScreen {
       card.style.setProperty('--i', String(i));
       this.shop.append(card);
     });
-    this.healBtn.textContent = hpFull ? 'HEALTH FULL' : `♥ WATER BREAK — ${healPrice} TIPS`;
-    this.healBtn.disabled = hpFull || tips < healPrice || busy;
+    this.healBtn.textContent = `♥ WATER BREAK — ${healPrice} TIPS`;
+    this.healBtn.disabled = tips < healPrice || busy;
+    show(this.healBtn, !hpFull);
     this.rerollBtn.textContent = `↻ NEW STOCK — ${rerollPrice} TIPS`;
     this.rerollBtn.disabled = tips < rerollPrice || busy;
     this.nextBtn.disabled = busy;

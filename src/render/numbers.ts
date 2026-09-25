@@ -141,8 +141,8 @@ export class DamageNumbers {
       text,
       color: typeof color === 'number' ? new THREE.Color(color) : color.clone(),
       size,
-      life: 0.9 + size * 0.25,
-      max: 0.9 + size * 0.25,
+      life: 0.62 + size * 0.2,
+      max: 0.62 + size * 0.2,
       vx: (Math.random() - 0.5) * 1.5,
       vy: 3.2 + size * 1.2,
     });

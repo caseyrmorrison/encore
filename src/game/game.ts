@@ -5,7 +5,7 @@ import * as V from '../audio/voices';
 import { clamp, damp, formatInt, lerp } from '../core/math';
 import { Input } from '../core/input';
 import { prof } from '../core/prof';
-import { dailyKey, dailySeed, seedToCode } from '../core/rng';
+import { dailyKey, dailySeed, parseSeedCode, seedToCode } from '../core/rng';
 import { loadSave, writeSave, type SaveData, type Settings } from '../core/save';
 import { BeamFx, GroundFx, GroundKind, ParticleSystem, Shape } from '../render/fx';
 import { CameraRig } from '../render/cameraRig';
@@ -22,6 +22,7 @@ import { Mainstage } from '../render/venues/mainstage';
 import { cardRarity, drawGoldOffers, drawOffers, PEDALS, type Card, type DraftContext } from '../seq/cards';
 import { GROOVES, type GrooveId } from '../seq/grooves';
 import { INSTRUMENTS, type InstrumentId } from '../seq/instruments';
+import { SETLISTS, SETLIST_IDS, type SetlistId } from '../seq/setlists';
 import { BackstageScreen, type ShopItem } from '../ui/backstage';
 import { describeCard } from '../ui/cardInfo';
 import { h } from '../ui/dom';
@@ -216,6 +217,7 @@ export class Game {
       merch: () => this.openMerch(),
       howto: () => this.howto.setVisible(true),
       settings: () => this.settingsUi.open(this.save.settings),
+      cycleSetlist: (dir) => this.cycleSetlist(dir),
     });
     this.pauseUi = new PauseScreen(uiRoot, {
       resume: () => this.resume(),
@@ -284,6 +286,46 @@ export class Game {
       }
     });
     setInterval(() => this.transport.pump(this.audio.now), 25);
+    window.addEventListener('blur', () => {
+      if (this.state === 'playing') this.pause();
+    });
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      if (this.state === 'playing') this.pause();
+      this.hud.toast('GRAPHICS CONTEXT LOST — RELOAD THE PAGE', '#ff3b5c');
+    });
+    // a shared run: ?seed=CODE (strictly validated; anything else is ignored)
+    try {
+      this.sharedSeed = parseSeedCode(new URLSearchParams(window.location.search).get('seed'));
+    } catch {
+      this.sharedSeed = null;
+    }
+  }
+
+  private sharedSeed: number | null = null;
+  private perfT = 0;
+  private perfFrames = 0;
+  private perfSlow = 0;
+
+  /** Step graphics quality down automatically if the machine can't hold ~45fps. */
+  private watchPerformance(rawDt: number): void {
+    if (this.state !== 'playing') return;
+    this.perfT += rawDt;
+    this.perfFrames++;
+    if (this.perfT < 3) return;
+    const fps = this.perfFrames / this.perfT;
+    this.perfT = 0;
+    this.perfFrames = 0;
+    this.perfSlow = fps < 45 ? this.perfSlow + 1 : 0;
+    if (this.perfSlow >= 2) {
+      this.perfSlow = 0;
+      const q = this.save.settings.quality;
+      const next = q === 'high' ? 'medium' : q === 'medium' ? 'low' : null;
+      if (next) {
+        this.applySettings({ ...this.save.settings, quality: next });
+        this.hud.toast(`GRAPHICS → ${next.toUpperCase()} FOR SMOOTHER PLAY`, '#2ee6ff');
+      }
+    }
   }
 
   /* ───────────────────────────── boot / title ───────────────────────────── */
@@ -306,7 +348,7 @@ export class Game {
     this.run = null;
     this.boss = null;
     this.state = 'title';
-    this.title.update(this.save, dailyKey(new Date()));
+    this.title.update(this.save, dailyKey(new Date()), this.sharedSeed !== null ? seedToCode(this.sharedSeed) : null);
     this.title.setVisible(true);
     this.music.pattern = null;
     this.music.backing = 'menu';
@@ -332,8 +374,12 @@ export class Game {
 
   private startRun(mode: RunMode, seedOverride?: number): void {
     void this.audio.resume();
-    const seed = seedOverride ?? (mode === 'daily' ? dailySeed(new Date()) : (Math.random() * 2 ** 32) >>> 0);
-    this.run = new Run(seed, mode, this.save.loudness);
+    const shared = mode === 'standard' && seedOverride === undefined ? this.sharedSeed : null;
+    const seed =
+      seedOverride ?? shared ?? (mode === 'daily' ? dailySeed(new Date()) : (Math.random() * 2 ** 32) >>> 0);
+    const sl = SETLISTS[this.save.setlist as SetlistId];
+    const setlist: SetlistId = mode === 'daily' || !sl || !sl.unlocked(this.save) ? 'garage' : sl.id;
+    this.run = new Run(seed, mode, this.save.loudness, setlist);
     this.newGroovesThisRun = 0;
     this.title.setVisible(false);
     this.results.setVisible(false);
@@ -450,6 +496,8 @@ export class Game {
     this.save.fans += fans;
     this.save.totalFans += fans;
     if (won) this.save.wins = Math.max(this.save.wins, run.loudness + 1);
+    const newBestKills = run.kills > this.save.bestKills && this.save.runs > 1;
+    const newBestHit = run.bestHit > this.save.bestHit && this.save.runs > 1;
     this.save.bestKills = Math.max(this.save.bestKills, run.kills);
     this.save.bestVenue = Math.max(this.save.bestVenue, cleared);
     this.save.bestHit = Math.max(this.save.bestHit, run.bestHit);
@@ -479,6 +527,8 @@ export class Game {
       daily: run.mode === 'daily',
       bestStreak: run.bestStreak,
       loop: run.loop,
+      newBestKills,
+      newBestHit,
     });
     this.resultsWon = won;
     if (won) {
@@ -530,6 +580,15 @@ export class Game {
     if (s.quality !== q || !persist) this.stage.setQuality(QUALITY[s.quality]);
     document.body.classList.toggle('no-flash', !s.flashes);
     if (persist) writeSave(this.save);
+  }
+
+  private cycleSetlist(dir: number): void {
+    const i = SETLIST_IDS.indexOf(this.save.setlist as SetlistId);
+    const next = SETLIST_IDS[(i + dir + SETLIST_IDS.length) % SETLIST_IDS.length]!;
+    this.save.setlist = next;
+    writeSave(this.save);
+    this.title.update(this.save, dailyKey(new Date()), this.sharedSeed !== null ? seedToCode(this.sharedSeed) : null);
+    V.uiClick(this.audio, this.audio.now, dir > 0 ? 4 : -2);
   }
 
   private openMerch(): void {
@@ -616,6 +675,7 @@ export class Game {
         this.transport.drain(audible, (ev) => this.venue.onStep(ev.step, ev.bar));
         this.updateVisuals(0, rawDt, beatPhase);
         this.editor?.tick(this.currentStep);
+        if (this.state === 'draft' || this.state === 'backstage') this.processStamps(rawDt);
         if (this.state === 'draft') this.draftKeys();
         break;
     }
@@ -628,6 +688,7 @@ export class Game {
     prof.begin('render');
     this.stage.render(rawDt);
     prof.end('render');
+    this.watchPerformance(rawDt);
     prof.end('frame');
   }
 
@@ -663,7 +724,8 @@ export class Game {
     this.rig.setLookAhead(0, 0);
     this.rig.update(dt);
     this.sign.update(dt, kick);
-    this.playerModel.baseY = 3.1;
+    this.title.pulse(kick);
+    this.playerModel.baseY = 3.4;
     this.playerModel.showFloorFx = false;
     this.playerModel.update(dt, this.time, 0, -22.4, Math.sin(this.time * 0.5) * 0.4, 0, beatPhase, this.spectrum, false, false);
     this.venue.update({
@@ -902,7 +964,7 @@ export class Game {
     const x = fx / l + tx * 0.6;
     const y = fz / l + tz * 0.6;
     const m = Math.hypot(x, y) || 1;
-    if (this.enemies.nearest(p.x, p.z, 2.4) && p.charges > 0) this.input.latch('dash');
+    if ((this.enemies.nearest(p.x, p.z, 2.4) || this.boss?.threat(p.x, p.z)) && p.charges > 0) this.input.latch('dash');
     if (this.dropState === 'ready') this.input.latch('drop');
     return { x: x / m, y: y / m };
   }
@@ -1049,7 +1111,7 @@ export class Game {
     this.buildStart = riserStart;
     this.buildEnd = riserEnd;
     this.dropState = 'queued';
-    this.hud.announce('BUILD IT UP', 'drop on the downbeat', '#ffb13d', 1.4);
+    this.hud.clearToasts();
   }
 
   private onStepEvent(ev: StepEvent): void {
@@ -1059,7 +1121,8 @@ export class Game {
     else if (this.dropState === 'queued' && ev.step % 4 === 0 && ev.time >= this.buildStart - 0.05) {
       const beatsLeft = Math.round((this.buildEnd - ev.time) / (this.transport.stepDur * 4));
       if (beatsLeft >= 1 && beatsLeft <= 4) {
-        this.hud.countdown(String(beatsLeft));
+        const on = this.rig.toScreen(this.player.x, 2, this.player.z, this.scr);
+        this.hud.countdown(String(beatsLeft), on ? this.scr.x : undefined, on ? this.scr.y : undefined);
         V.tom(this.audio, this.audio.now, 0.5, 12 - beatsLeft * 2);
       }
     }
@@ -1208,12 +1271,13 @@ export class Game {
       this.numBudgetT = this.time;
       this.numBudget = 0;
     }
-    if (++this.numBudget > 7 && !e.numCrit && !big && !e.scripted) {
+    if (++this.numBudget > 5 && !e.numCrit && !big && !e.scripted) {
       e.numAcc = 0;
       return;
     }
     const color = e.numCrit ? 0xffe14d : big ? 0xff4df0 : e.numColor;
-    const size = (e.numCrit ? 0.95 : 0.6) * (big ? 1.45 : 1) * (e.scripted ? 1.3 : 1);
+    const byDamage = Math.min(1.35, 0.45 + Math.log10(dmg + 1) * 0.16);
+    const size = byDamage * (e.numCrit ? 1.3 : 1) * (big ? 1.25 : 1) * (e.scripted ? 1.2 : 1);
     this.numbers.spawn(e.x, 2.2 + e.radius, e.z, dmg, color, size);
     e.numAcc = 0;
     e.numCrit = false;
@@ -1269,7 +1333,12 @@ export class Game {
     if (Math.random() < 0.5)
       this.glow.emit({ x: e.x, y: 1.2, z: e.z, vy: 3.5, life: 0.9, size: 0.7, color, shape: Shape.Note, alpha: 0.9 });
     this.dark.burst(e.x, 0.6, e.z, 4, 0x0c0612, 2, { life: 0.45, size: 0.8, sizeEnd: 1.6, alpha: 0.55 });
-    this.shadowFx.add(GroundKind.Disc, e.x, e.z, e.radius * 1.2, e.radius * 1.6, 1.5, 0x000000, { alpha: 0.35 });
+    // the eyes go out last
+    const eh = e.kind === 'mute' ? 2.0 * e.scale : e.kind === 'shusher' ? 2.1 * e.scale : 0.75 * e.scale;
+    for (const s of [-1, 1]) {
+      this.glow.emit({ x: e.x + s * 0.2 * e.scale, y: eh, z: e.z + 0.2, vy: 0.6, life: 0.5, size: 0.32 * e.scale, sizeEnd: 0.05, color: 0xf4f1ff, shape: Shape.Dot, drag: 4 });
+    }
+    this.shadowFx.add(GroundKind.Disc, e.x, e.z, e.radius * 0.5, e.radius * 0.9, 0.6, 0x000000, { alpha: 0.14 });
     this.music.plink(this.streak);
     if (this.audio.allowHit(3)) V.shh(this.audio, this.audio.now, 0.8);
     this.addHype(e.elite ? 0.12 : 0.0045 + (e.kind === 'mute' ? 0.004 : 0));
@@ -1388,6 +1457,7 @@ export class Game {
   }
 
   private godMode = false;
+  private readonly pendingIntros: InstrumentId[] = [];
   private overlayOpen = false;
 
   private hurt(amount: number, fromX: number, fromZ: number): void {
@@ -1543,6 +1613,11 @@ export class Game {
     this.boss.spawn(this.bossCtx, bx, bz);
     this.boss.attach(this.world);
     this.music.backing = 'boss';
+    // second wind: the crowd roars for the headliner
+    const run = this.run!;
+    const healed = Math.round(run.stats.maxHp * 0.3);
+    run.hp = Math.min(run.stats.maxHp, run.hp + healed);
+    this.hud.toast(`THE CROWD ROARS  +${healed} HEALTH`, '#3dffb0');
     this.hud.announce(this.boss.name, this.boss.title, '#' + this.boss.color.toString(16).padStart(6, '0'), 3.5);
     V.roar(this.audio, this.audio.now, 1);
     V.impact(this.audio, this.audio.now + 0.05, 0.9);
@@ -1581,7 +1656,49 @@ export class Game {
     this.world.remove(boss.group);
     for (let i = 0; i < 12; i++) this.pickups.spawn('tip', boss.x, boss.z, 5, 3);
     run.tips += 40;
+    if (run.venueIndex >= 2) {
+      this.finale();
+      return;
+    }
     this.hud.announce(`${VENUE_NAMES[run.venueIndex]} HEADLINED`, 'the crowd is losing its mind', '#ffe14d', 3.6);
+  }
+
+  /** The Hush falls: fireworks, a chanting crowd, and a stage lit gold. */
+  private finale(): void {
+    const p = this.player;
+    this.bossDownT = 9;
+    this.hud.announce('ENCORE!', 'the silence is broken', '#ffd36b', 5, true);
+    const acc = [0xffd36b, 0xff2dd4, 0x2ee6ff, 0xffffff, 0x8cff5a];
+    for (let k = 0; k < 26; k++) {
+      this.schedule(0.4 + k * 0.28, () => {
+        const x = p.x + (Math.random() - 0.5) * 40;
+        const z = p.z - 6 - Math.random() * 14;
+        const c = acc[k % acc.length]!;
+        // rocket
+        for (let t = 0; t < 8; t++)
+          this.glow.emit({ x, y: 1 + t * 1.6, z, vy: 2, life: 0.35 + t * 0.04, size: 0.4, sizeEnd: 0, color: 0xfff1d0, shape: Shape.Dot });
+        // burst
+        this.schedule(0.32, () => {
+          this.glow.burst(x, 14 + Math.random() * 4, z, 90, c, 18, { vy: 6, life: 1.6, size: 0.45, shape: Shape.Spark, gravity: 6, drag: 1.6 });
+          this.glow.emit({ x, y: 15, z, life: 0.4, size: 12, sizeEnd: 16, color: c, shape: Shape.Ring, alpha: 0.6 });
+          V.kick(this.audio, this.audio.now, 0.5, true);
+          V.crash(this.audio, this.audio.now + 0.02, 0.35);
+        });
+      });
+    }
+    // "EN-CORE! EN-CORE!" on the beat
+    const beat = this.transport.stepDur * 4;
+    const t0 = this.transport.nextDownbeat(this.audio.now);
+    const chord = this.music.currentChord;
+    for (let i = 0; i < 8; i++) {
+      const t = t0 + i * beat * 2;
+      V.choir(this.audio, t, [chord.root, chord.root + 7], beat * 0.45, 1.1);
+      V.choir(this.audio, t + beat, [chord.root + 3, chord.root + 10], beat * 0.8, 1.2);
+      V.clap(this.audio, t, 0.8);
+      V.clap(this.audio, t + beat, 0.8);
+      V.crowdCheer(this.audio, t, 0.5, 1.2);
+    }
+    V.crowdCheer(this.audio, this.audio.now, 1.6, 6);
   }
 
   private afterBoss(): void {
@@ -1668,17 +1785,32 @@ export class Game {
       this.save.grooves.push(g);
       writeSave(this.save);
     }
-    this.music.fanfare(true);
-    this.announceQueue.push({
-      title: `${firstEver ? 'NEW GENRE: ' : ''}${d.genre}`,
-      sub: `${d.name} — ${d.bonus}`,
-      color: d.color,
-      big: true,
+    this.queueStamp(() => {
+      this.music.fanfare(true);
+      V.scratch(this.audio, this.audio.now, 1, 0.28);
+      this.hud.stamp(d.genre, d.name, d.bonus, d.color, firstEver);
+      if (this.state === 'playing') this.hitStop = Math.max(this.hitStop, 0.35);
     });
-    if (this.state === 'draft' || this.state === 'backstage') this.processAnnouncements(10);
+  }
+
+  private readonly stampQueue: (() => void)[] = [];
+  private stampCooldown = 0;
+
+  /** Big centre moments never stack: stamps wait for drops and for each other. */
+  private queueStamp(fn: () => void): void {
+    this.stampQueue.push(fn);
+  }
+
+  private processStamps(dt: number): void {
+    this.stampCooldown -= dt;
+    if (this.stampCooldown > 0 || !this.stampQueue.length) return;
+    if (this.dropState === 'queued' || this.dropState === 'active') return;
+    this.stampQueue.shift()!();
+    this.stampCooldown = 2.4;
   }
 
   private processAnnouncements(dt: number): void {
+    this.processStamps(dt);
     this.announceCooldown -= dt;
     if (this.announceCooldown > 0 || !this.announceQueue.length) return;
     const a = this.announceQueue.shift()!;
@@ -1771,9 +1903,9 @@ export class Game {
     switch (card.kind) {
       case 'instrument':
         run.pattern.addTrack(card.inst);
+        this.pendingIntros.push(card.inst);
         ed.rebuild();
         ed.focusTrack = run.pattern.tracks.length - 1;
-        this.hud.toast(`${INSTRUMENTS[card.inst].name.toUpperCase()} JOINS THE BAND`, INSTRUMENTS[card.inst].css);
         break;
       case 'notes':
         run.pattern.addSpare(card.inst, card.n);
@@ -1799,8 +1931,13 @@ export class Game {
           t.evolved = true;
           run.pattern.version++;
           run.evolvedNow.add(card.inst);
-          this.announceQueue.push({ title: INSTRUMENTS[card.inst].evolution.name, sub: 'EVOLUTION', color: '#ffd36b', big: true });
-          this.music.fanfare(true);
+          const evo = INSTRUMENTS[card.inst].evolution;
+          const nm = INSTRUMENTS[card.inst].name.toUpperCase();
+          this.queueStamp(() => {
+            this.hud.stamp(evo.name, `${nm} EVOLVED`, evo.blurb, '#ffd36b', true);
+            V.gong(this.audio, this.audio.now, 0.7);
+            this.music.fanfare(true);
+          });
           if (!this.save.evolutions.includes(card.inst)) {
             this.save.evolutions.push(card.inst);
             writeSave(this.save);
@@ -1874,6 +2011,68 @@ export class Game {
     }
     this.state = 'playing';
     this.muffleTarget = 0;
+    this.playIntros();
+  }
+
+  /** New band members drop in from the rafters under a spotlight and soundcheck. */
+  private playIntros(): void {
+    while (this.pendingIntros.length) {
+      const inst = this.pendingIntros.shift()!;
+      this.band.introduce(inst);
+      const color = INSTRUMENTS[inst].color;
+      this.schedule(0.05, () => {
+        const o = this.band.origin(inst, this.player.x, this.player.z);
+        this.beams.add(o.x, 0, o.z, o.x, 30, o.z, 2.6, color, 1.1, 0.8);
+        this.ground.add(GroundKind.Shock, o.x, o.z, 0.5, 4, 0.6, color, { thickness: 0.08 });
+        this.glow.burst(o.x, 2, o.z, 30, color, 8, { vy: 6, life: 0.8, size: 0.35, shape: Shape.Spark });
+      });
+      const t = this.transport.upcoming;
+      const chord = this.music.currentChord;
+      const beat = this.transport.stepDur * 2;
+      const voice = (k: number): void => {
+        const at = t + k * beat;
+        switch (inst) {
+          case 'bass':
+            V.bass(this.audio, at, chord.root - 24 + (k ? 7 : 0), beat * 0.9, 0.8, 0);
+            break;
+          case 'lead':
+            V.lead(this.audio, at, chord.root + 12 + (k ? 7 : 0), 0.9);
+            break;
+          case 'pad':
+            V.pad(this.audio, at, [chord.root, chord.root + 7], beat * 2, 0.8, 0.5);
+            break;
+          case 'organ':
+            V.organ(this.audio, at, [chord.root, chord.root + 7], beat, 0.8);
+            break;
+          case 'gong':
+            if (k === 0) V.gong(this.audio, at, 0.8);
+            break;
+          case 'hat':
+            V.hat(this.audio, at, 0.8, k === 1);
+            break;
+          case 'clap':
+            V.clap(this.audio, at, 0.9);
+            break;
+          case 'crash':
+            if (k === 1) V.crash(this.audio, at, 0.8);
+            break;
+          case 'tom':
+            V.tom(this.audio, at, 0.9, k ? -5 : 0);
+            break;
+          case 'cowbell':
+            V.cowbell(this.audio, at, 0.9);
+            break;
+          case 'scratch':
+            V.scratch(this.audio, at, 0.9, 0.15);
+            break;
+          default:
+            V.kick(this.audio, at, 0.8);
+        }
+      };
+      voice(0);
+      voice(1);
+      this.hud.toast(`${INSTRUMENTS[inst].name.toUpperCase()} JOINS THE BAND — "ONE, TWO"`, INSTRUMENTS[inst].css);
+    }
   }
 
   /* ───────────────────────────── backstage ───────────────────────────── */
@@ -1894,8 +2093,8 @@ export class Game {
     this.backstage.attachEditor(ed.el);
     const next = VENUE_NAMES[run.venueIndex + 1] ?? 'THE MAINSTAGE';
     this.backstage.open(
-      `BACKSTAGE — ${VENUE_NAMES[run.venueIndex]} HEADLINED`,
-      'Spend your tips. Rework the machine. Next up is a bigger room.',
+      'BACKSTAGE',
+      `${VENUE_NAMES[run.venueIndex]} headlined. Spend your tips, rework the machine — next up is a bigger room.`,
       `WALK OUT TO ${next} ▸`,
     );
     this.renderShop();
@@ -1970,6 +2169,7 @@ export class Game {
     this.backstage.close();
     this.editor?.setMode({ kind: 'free' });
     this.beginVenue(run.venueIndex + 1);
+    this.schedule(1.5, () => this.playIntros());
   }
 
   /* ───────────────────────────── visuals ───────────────────────────── */
@@ -2145,6 +2345,7 @@ export class Game {
       game: this,
       levelUp: (n = 1) => {
         if (!this.run) return;
+        this.run.level += n;
         this.run.pendingDrafts += n;
       },
       gold: () => this.run && this.run.pendingGold++,

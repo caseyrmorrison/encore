@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Rng } from '../../core/rng';
 import { M } from '../materials';
+import { buildSpeakerStack } from '../instrumentModels';
 import {
   beamGeometry,
   GLSL_COMMON,
@@ -12,7 +13,7 @@ import {
   type VenuePalette,
 } from './venue';
 
-const HX = 36;
+const HX = 30;
 const HZ = 22;
 
 const FLOOR_VERT = /* glsl */ `
@@ -59,7 +60,10 @@ void main() {
   // moving-head light pools
   for (int i = 0; i < 8; i++) {
     float d = length(w - uSpots[i].xy);
-    col += uSpotCols[i] * smoothstep(uSpots[i].z, uSpots[i].z * 0.2, d) * uSpots[i].w;
+    // real follow-spot pools: hard rim, soft interior
+    float pool = smoothstep(uSpots[i].z, uSpots[i].z * 0.9, d);
+    float rimEdge = smoothstep(uSpots[i].z * 0.8, uSpots[i].z * 0.97, d) * pool;
+    col += uSpotCols[i] * (pool * 0.55 + rimEdge * 0.9) * uSpots[i].w;
   }
   // drop: the whole deck strobes in stripes
   col += lc * uDrop * step(0.5, fract(w.x * 0.08 + uTime * 3.0)) * 0.25;
@@ -129,8 +133,8 @@ export class Mainstage implements Venue {
   };
   readonly group = new THREE.Group();
   readonly obstacles: { x: number; z: number; r: number }[] = [
-    { x: -20, z: 0, r: 1.6 },
-    { x: 20, z: 0, r: 1.6 },
+    { x: -16, z: -2, r: 1.5 },
+    { x: 16, z: -2, r: 1.5 },
   ];
   private readonly floorMat: THREE.ShaderMaterial;
   private readonly ledMat: THREE.ShaderMaterial;
@@ -146,6 +150,7 @@ export class Mainstage implements Venue {
   private readonly tmp = new THREE.Vector3();
   private readonly bands: number[] = new Array(16).fill(0);
   private pyroT = 0;
+  private barrierMat!: THREE.MeshBasicMaterial;
   private readonly pyro: THREE.Mesh[] = [];
 
   constructor() {
@@ -315,21 +320,21 @@ export class Mainstage implements Venue {
       g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
       return g;
     })();
-    const crowdMat = new THREE.MeshStandardMaterial({ color: 0x1a1426, roughness: 0.8, emissive: 0x100818 });
+    const crowdMat = new THREE.MeshStandardMaterial({ color: 0x2a2236, roughness: 0.6, emissive: 0x0c0612 });
     const places: { x: number; z: number }[] = [];
-    for (let z = -HZ; z < HZ + 22; z += 1.1) {
-      for (let x = HX + 4; x < HX + 26; x += 1.1) {
+    for (let z = -HZ; z < HZ + 22; z += 1.05) {
+      for (let x = HX + 2.2; x < HX + 24; x += 1.05) {
         places.push({ x, z }, { x: -x, z });
       }
     }
-    for (let z = HZ + 4; z < HZ + 22; z += 1.1) for (let x = -HX - 4; x < HX + 4; x += 1.1) places.push({ x, z });
+    for (let z = HZ + 2.2; z < HZ + 22; z += 1.05) for (let x = -HX - 2.2; x < HX + 2.2; x += 1.05) places.push({ x, z });
     this.crowd = new THREE.InstancedMesh(person, crowdMat, places.length);
     this.phones = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.2, 0.04), M.glow(0xeaf4ff, 3), Math.ceil(places.length / 7));
     let ph = 0;
     places.forEach((p, i) => {
       const jx = p.x + (Math.random() - 0.5) * 0.5;
       const jz = p.z + (Math.random() - 0.5) * 0.5;
-      this.crowdSeeds.push({ x: jx, z: jz, s: Math.random(), y: -0.3 - Math.random() * 0.3 });
+      this.crowdSeeds.push({ x: jx, z: jz, s: Math.random(), y: -0.55 - Math.random() * 0.25 });
       if (i % 7 === 0 && ph < this.phones.count) {
         this.m4.makeTranslation(jx + 0.35, 2.4, jz);
         this.phones.setMatrixAt(ph++, this.m4);
@@ -339,18 +344,35 @@ export class Mainstage implements Venue {
     this.phones.frustumCulled = false;
     this.group.add(this.crowd, this.phones);
 
-    // riser pillars (obstacles): speaker stacks on stage
+    // obstacles: touring PA stacks on the deck
     for (const o of this.obstacles) {
-      const s = new THREE.Mesh(new THREE.BoxGeometry(o.r * 1.9, 4, o.r * 1.9), M.blackPlastic());
-      s.position.set(o.x, 2, o.z);
-      this.group.add(s);
-      const cone = new THREE.Mesh(new THREE.CircleGeometry(o.r * 0.7, 24), M.rubber());
-      cone.position.set(o.x, 2.2, o.z + o.r * 0.96);
-      this.group.add(cone);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(o.r * 0.72, 0.05, 8, 32), M.glow(0x2ee6ff, 3));
-      ring.position.copy(cone.position);
-      this.group.add(ring);
+      const stack = buildSpeakerStack(3, o.x < 0 ? 0xff2dd4 : 0x2ee6ff);
+      stack.position.set(o.x, 0, o.z);
+      stack.scale.setScalar(0.95);
+      this.group.add(stack);
     }
+    // crowd barrier: a glowing strip that backlights the front rows
+    const barrierMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff2dd4).multiplyScalar(1.6), toneMapped: false });
+    this.barrierMat = barrierMat;
+    for (const [x, z, w, d] of [
+      [HX + 1.2, 0, 0.12, HZ * 2 + 4],
+      [-HX - 1.2, 0, 0.12, HZ * 2 + 4],
+      [0, HZ + 1.2, HX * 2 + 2.4, 0.12],
+    ] as const) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), barrierMat);
+      bar.position.set(x, 0.35, z);
+      this.group.add(bar);
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(Math.max(w, 0.2), 1.1, Math.max(d, 0.2)), M.darkChrome());
+      rail.position.set(x + Math.sign(x) * 0.3, -0.2, z + Math.sign(z) * 0.3);
+      this.group.add(rail);
+    }
+    const crowdWash = new THREE.PointLight(0xff4df0, 120, 40, 1.4);
+    crowdWash.position.set(HX + 8, 6, 0);
+    const crowdWash2 = new THREE.PointLight(0x2ee6ff, 120, 40, 1.4);
+    crowdWash2.position.set(-HX - 8, 6, 0);
+    const crowdWash3 = new THREE.PointLight(0xffe14d, 90, 40, 1.4);
+    crowdWash3.position.set(0, 6, HZ + 8);
+    this.group.add(crowdWash, crowdWash2, crowdWash3);
 
     const hemi = new THREE.HemisphereLight(0xb08cff, 0x100418, 1.1);
     this.group.add(hemi);
@@ -413,6 +435,7 @@ export class Mainstage implements Venue {
     }
     this.crowd.instanceMatrix.needsUpdate = true;
 
+    this.barrierMat.color.setHex(this.palette.accents[Math.floor(f.time * 0.5) % 4]!).multiplyScalar(1 + beat * 1.5);
     this.pyroT = Math.max(this.pyroT - f.dt, f.drop && beat > 0.9 ? 0.35 : 0);
     const fire = this.pyroT > 0 ? Math.min(1, this.pyroT * 3) : 0;
     for (const p of this.pyro) {

@@ -83,11 +83,15 @@ void main() {
   // THE FLOOR IS THE SEQUENCER: the playhead sweeps a column of tiles across the room
   float colIdx = floor((cc.x + uHalf.x) / (uHalf.x * 2.0) * 16.0);
   float head = floor(uStep);
-  float ph = step(abs(colIdx - head), 0.5) * (1.0 - fract(uStep) * 0.6);
-  float trail = step(abs(colIdx - mod(head - 1.0, 16.0)), 0.5) * 0.35;
-  float sweep = max(ph * 0.45, trail * 0.15);
+  // one tile wide: the tile column at the centre of the playhead's band
+  float bandCentre = (floor(uStep) + 0.5) / 16.0 * uHalf.x * 2.0 - uHalf.x;
+  float ph = step(abs(cc.x - bandCentre), 1.01) * (1.0 - fract(uStep) * 0.5);
+  float sweep = ph * 0.5;
   // snares/claps flash the performer's row, hats sparkle
-  float rowHit = step(abs(cc.y - uPlayer.y), 1.5) * uSnare;
+  // the flash races outward along the row as it fades
+  float along = abs(cc.x - uPlayer.x);
+  float reach = (1.0 - uSnare) * 26.0 + 4.0;
+  float rowHit = step(abs(cc.y - uPlayer.y), 1.5) * smoothstep(reach, reach - 6.0, along) * uSnare * 0.75;
   float sparkle = step(0.93, hash21(cell + floor(uTime * 16.0))) * uHat;
   vec3 seqCol = uCols[0] * sweep + uCols[1] * rowHit * 0.9 + uCols[3] * sparkle * 0.9;
   lit = max(lit, max(sweep, max(rowHit * 0.9, sparkle * 0.9)));
@@ -96,7 +100,11 @@ void main() {
   float inner = clamp(1.0 - length(f) * 1.5, 0.0, 1.0);
   vec3 col = vec3(0.008, 0.006, 0.012);
   vec3 lightCol = mix(tc, seqCol / max(0.001, max(max(seqCol.r, seqCol.g), seqCol.b)), step(0.01, length(seqCol)) * 0.85);
-  col += lightCol * lit * (0.2 + inner * inner * 2.4 + smoothstep(0.38, 0.47, edgeDist) * 0.8) * 1.4;
+  // in combat the floor sits back (dimmer, less saturated) so shots stay readable; the DROP lets it loose
+  float grey = dot(lightCol, vec3(0.3, 0.55, 0.15));
+  lightCol = mix(mix(vec3(grey), lightCol, 0.7), lightCol, uDrop);
+  float floorGain = mix(0.55, 1.0, uDrop);
+  col += lightCol * lit * floorGain * (0.2 + inner * inner * 2.4 + smoothstep(0.38, 0.47, edgeDist) * 0.8) * 1.4;
   // unlit glass still catches a whisper of colour + fine scratches
   col += tc * 0.012 * (0.4 + inner);
   col += vec3(0.006) * smoothstep(0.7, 0.74, fbm(w * 3.0 + h * 10.0));
@@ -113,7 +121,10 @@ void main() {
   // moving-head spots
   for (int i = 0; i < 6; i++) {
     float d = length(w - uSpots[i].xy);
-    col += uSpotCols[i] * smoothstep(uSpots[i].z, uSpots[i].z * 0.2, d) * uSpots[i].w;
+    // real follow-spot pools: hard rim, soft interior
+    float pool = smoothstep(uSpots[i].z, uSpots[i].z * 0.9, d);
+    float rimEdge = smoothstep(uSpots[i].z * 0.8, uSpots[i].z * 0.97, d) * pool;
+    col += uSpotCols[i] * (pool * 0.55 + rimEdge * 0.9) * uSpots[i].w;
   }
   col *= mix(0.12, 1.0, grout);
 

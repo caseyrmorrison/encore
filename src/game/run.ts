@@ -2,7 +2,8 @@ import { Rng } from '../core/rng';
 import { emptyPedals, type PedalId } from '../seq/cards';
 import { detectGrooves, type GrooveId, type GrooveState } from '../seq/grooves';
 import type { InstrumentId } from '../seq/instruments';
-import { Pattern } from '../seq/pattern';
+import { Pattern, STEPS } from '../seq/pattern';
+import { SETLISTS, type SetlistId } from '../seq/setlists';
 
 export interface RunStats {
   dmgMult: number;
@@ -90,9 +91,10 @@ export class Run {
   pendingDrafts = 0;
   pendingGold = 0;
   loudness: number;
+  readonly setlist: SetlistId;
   private lastPatternVersion = -1;
 
-  constructor(seed: number, mode: RunMode, loudness: number) {
+  constructor(seed: number, mode: RunMode, loudness: number, setlist: SetlistId = 'garage') {
     this.seed = seed;
     this.mode = mode;
     this.loudness = loudness;
@@ -100,9 +102,17 @@ export class Run {
     this.draftRng = root.fork('draft');
     this.spawnRng = root.fork('spawn');
     this.lootRng = root.fork('loot');
-    this.pattern.addTrack('kick');
-    this.pattern.addTrack('snare');
+    this.setlist = setlist;
+    for (const t of SETLISTS[setlist].tracks) {
+      const tr = this.pattern.addTrack(t.inst);
+      if (tr && t.notes) {
+        tr.notes = new Array<boolean>(STEPS).fill(false);
+        for (const n of t.notes) tr.notes[n] = true;
+      }
+    }
     this.stats = computeStats(this.pedals, this.grooves, loudness);
+    this.stats.maxHp += SETLISTS[setlist].maxHpMod;
+    this.stats.hypeGain *= SETLISTS[setlist].hypeMod;
     this.hp = this.stats.maxHp;
   }
 
@@ -127,6 +137,8 @@ export class Run {
     }
     const prevMax = this.stats.maxHp;
     this.stats = computeStats(this.pedals, this.grooves, this.loudness);
+    this.stats.maxHp += SETLISTS[this.setlist].maxHpMod;
+    this.stats.hypeGain *= SETLISTS[this.setlist].hypeMod;
     if (this.stats.maxHp > prevMax) this.hp += this.stats.maxHp - prevMax;
     this.hp = Math.min(this.hp, this.stats.maxHp);
     return fresh;
