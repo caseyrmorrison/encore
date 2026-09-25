@@ -510,6 +510,7 @@ export class Game {
     this.stage.scene.background = new THREE.Color(p.background);
     this.stage.scene.fog = new THREE.FogExp2(p.fog, p.fogDensity);
     this.enemies.setColors(p.rim, p.floor);
+    this.enemies.setVenue(this.venue.id);
     this.playerModel.setHaloPalette(p.accents);
     this.playerModel.coreColor.setHex(p.core);
     this.audio.setRoom(this.venue.id === 'cathedral' ? 5 : this.venue.id === 'mainstage' ? 3 : 1.6, this.venue.id === 'cathedral' ? 2 : 3, 1);

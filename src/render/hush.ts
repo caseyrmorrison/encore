@@ -337,6 +337,41 @@ export function hushLooks(): Record<HushKind, HushLook> {
   };
 }
 
+/**
+ * The fodder dresses for the room: tufted blobs in the Basement, little hooded choristers in
+ * the Cathedral, headphone-wearing ravers on the Mainstage. Silhouettes only (the velvet stays
+ * black), and all readable from the high camera.
+ */
+export function moteVariant(venue: 'basement' | 'cathedral' | 'mainstage'): THREE.BufferGeometry {
+  const body = new THREE.SphereGeometry(0.5, 28, 20);
+  body.scale(1, 0.9, 1);
+  body.translate(0, 0.48, 0);
+  if (venue === 'cathedral') {
+    const hood = new THREE.ConeGeometry(0.34, 0.62, 18);
+    hood.rotateX(-0.25);
+    hood.translate(0, 1.02, -0.08);
+    const hem = new THREE.CylinderGeometry(0.46, 0.62, 0.22, 24, 1, true);
+    hem.translate(0, 0.12, 0);
+    return merge([body, hood, hem]);
+  }
+  if (venue === 'mainstage') {
+    const band = new THREE.TorusGeometry(0.5, 0.055, 8, 20, Math.PI);
+    band.translate(0, 0.52, 0);
+    const cups: THREE.BufferGeometry[] = [];
+    for (const x of [-0.5, 0.5]) {
+      const cup = new THREE.CylinderGeometry(0.17, 0.17, 0.14, 16);
+      cup.rotateZ(Math.PI / 2);
+      cup.translate(x, 0.55, 0);
+      cups.push(cup);
+    }
+    return merge([body, band, ...cups]);
+  }
+  const tuft = new THREE.ConeGeometry(0.11, 0.34, 10);
+  tuft.rotateZ(-0.6);
+  tuft.translate(0.1, 0.98, 0);
+  return merge([body, tuft]);
+}
+
 /** Instanced renderer for one enemy type. */
 export class HushBatch {
   readonly mesh: THREE.InstancedMesh;
@@ -363,6 +398,16 @@ export class HushBatch {
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
+  }
+
+  /** Swap the silhouette (per venue); the instanced state buffers carry over. */
+  setGeometry(g: THREE.BufferGeometry): void {
+    const geo = g.clone();
+    geo.setAttribute('aState', this.state);
+    geo.setAttribute('aBeat', this.beat);
+    const old = this.mesh.geometry;
+    this.mesh.geometry = geo;
+    old.dispose();
   }
 
   begin(): void {

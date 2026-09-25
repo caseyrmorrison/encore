@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SpatialHash } from '../core/spatialHash';
-import { HushBatch, hushLooks, type HushKind } from '../render/hush';
+import { HushBatch, hushLooks, moteVariant, type HushKind } from '../render/hush';
 import { clampToBounds, pushOutOfObstacles, type Bounds } from '../render/venues/venue';
 
 export interface EnemyDef {
@@ -176,6 +176,11 @@ export class EnemyManager {
 
   setColors(rim: THREE.Color, floor: THREE.Color): void {
     for (const b of Object.values(this.batches)) b.setColors(rim, floor);
+  }
+
+  /** Dress the fodder for the room. */
+  setVenue(id: 'basement' | 'cathedral' | 'mainstage'): void {
+    this.batches.mote.setGeometry(moteVariant(id));
   }
 
   spawn(kind: HushKind, x: number, z: number, hpMult: number, elite = false): Enemy | null {
