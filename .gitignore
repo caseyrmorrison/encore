@@ -9,3 +9,4 @@ shots/
 .env.*
 .claude/settings.local.json
 .bot-build/
+.claude/worktrees/
