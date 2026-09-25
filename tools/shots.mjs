@@ -401,7 +401,12 @@ const S = {
     console.log('fps build', await fps());
   },
   async drop() {
+    const dv = Number(opt('venue', '0'));
     await start();
+    if (dv > 0) {
+      await E((dv) => window.__encore.venue(dv), dv);
+      await sleep(3500);
+    }
     await E(() => {
       const d = window.__encore;
       d.god();
