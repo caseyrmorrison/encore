@@ -3464,3 +3464,27 @@ div.touch {
 .hud.boss-mode .boss-bar {
   order: 5;
 }
+/* phones: overlays are zoomed to 0.66, so panels may use the full (unzoomed) height, and the
+   merch table packs six to a row */
+@media (max-height: 560px) {
+  .overlay .panel {
+    max-height: calc((100vh - 16px) / 0.66);
+    padding: 18px 22px;
+  }
+  .merch-grid,
+  .merch-grid.upgrades {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .merch-item img,
+  .merch-grid.upgrades .merch-item img {
+    width: 54px;
+    height: 54px;
+  }
+  .merch .panel-sub {
+    display: none;
+  }
+  .mic-skin img {
+    width: 64px;
+    height: 64px;
+  }
+}
