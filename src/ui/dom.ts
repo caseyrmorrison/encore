@@ -56,3 +56,17 @@ export function show(el: HTMLElement, on: boolean): void {
 export function isSafeImageSrc(src: string): boolean {
   return /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(src) || /^\.?\/(?!\/)[\w./-]+$/.test(src);
 }
+
+/**
+ * The tour at a glance: six stops, the clubs then the festivals, with the ones already
+ * headlined ticked and the current one pulsing.
+ */
+export function tourStrip(names: readonly string[], festivalFrom: number, current: number, done: number): HTMLElement {
+  const el = h('div', { class: 'tour-strip' });
+  names.forEach((n, i) => {
+    if (i === festivalFrom) el.append(h('span', { class: 'tour-gap', text: 'FESTIVAL SEASON' }));
+    const state = i < done ? ' done' : i === current ? ' now' : '';
+    el.append(h('span', { class: `tour-stop${i >= festivalFrom ? ' fest' : ''}${state}`, text: (i < done ? '✓ ' : '') + n }));
+  });
+  return el;
+}

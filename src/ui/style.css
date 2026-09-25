@@ -3287,3 +3287,133 @@ div.touch {
   letter-spacing: 0.06em;
   color: var(--accent);
 }
+
+/* badges & mics tab */
+.merch-grid.badges {
+  display: block;
+}
+.mic-rack {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 6px 0 14px;
+}
+.mic-skin {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+.mic-skin img {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+.mic-skin.on {
+  border-color: var(--hot);
+  box-shadow: 0 0 22px rgba(255, 45, 120, 0.45);
+}
+.mic-skin.locked {
+  cursor: default;
+}
+.mic-skin.locked img {
+  filter: grayscale(1) brightness(0.3);
+}
+.badge-wall {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+.badge {
+  --bc: #fff;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--line-2);
+  opacity: 0.6;
+}
+.badge.got {
+  opacity: 1;
+  border: 1px solid color-mix(in srgb, var(--bc) 55%, transparent);
+  background: color-mix(in srgb, var(--bc) 10%, rgba(0, 0, 0, 0.2));
+}
+.badge-medal {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-family: var(--display);
+  font-size: 16px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.06);
+}
+.badge.got .badge-medal {
+  color: #140c00;
+  background: radial-gradient(circle at 35% 30%, #fff, var(--bc) 60%);
+  box-shadow: 0 0 16px var(--bc);
+}
+.badge-name {
+  font-family: var(--display);
+  font-size: 12px;
+}
+.badge-how {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* the tour at a glance */
+.tour-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.tour-stop {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+.tour-stop.fest {
+  border-style: dashed;
+}
+.tour-stop.done {
+  color: #0d0a14;
+  background: #3dffb0;
+  border-color: transparent;
+}
+.tour-stop.now {
+  color: #fff;
+  background: var(--hot);
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(255, 45, 120, 0.6);
+  animation: blink 1s steps(2) infinite;
+}
+.tour-gap {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #ffb13d;
+  padding: 0 4px;
+}
+
+.results-panel .strip-slot {
+  margin: -12px 0 14px;
+}

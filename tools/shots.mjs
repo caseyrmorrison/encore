@@ -645,6 +645,12 @@ const S = {
     await page.locator('.merch-item.upgrade .btn.primary').first().click();
     await sleep(500);
     await shot('merch-bought');
+    await E(() => ['club', 'digger', 'opening', 'addict'].forEach((b) => window.__encore.badge(b)));
+    await page.locator('.merch-tab', { hasText: 'BADGES' }).click();
+    await sleep(600);
+    await page.locator('.mic-skin', { hasText: 'GOLD RECORD' }).click();
+    await sleep(600);
+    await shot('merch-badges');
   },
   async settings() {
     await start();

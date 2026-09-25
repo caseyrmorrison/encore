@@ -5,6 +5,7 @@ import { INSTRUMENTS, INSTRUMENT_IDS, RARITY_COLOR, type InstrumentId } from '..
 import { SETLISTS, type SetlistId } from '../seq/setlists';
 import { maxLevel, nextCost, UPGRADE_IDS, UPGRADES, type UpgradeIcon, type UpgradeId } from '../seq/upgrades';
 import type { PedalId } from '../seq/cards';
+import { BADGE_IDS, BADGES, ownedSkins, SKIN_IDS, SKINS, type SkinId } from '../seq/badges';
 import type { IconFactory } from '../render/icons';
 import { clear, h, isSafeImageSrc, show } from './dom';
 
@@ -408,6 +409,8 @@ export interface ResultStats {
   rumour?: string;
   /** a won run: the club tour (Mainstage) or the whole world tour (Megafest) */
   tier?: 'club' | 'world';
+  /** how far along the tour this show got */
+  strip?: HTMLElement;
 }
 
 export class ResultsScreen {
@@ -418,6 +421,7 @@ export class ResultsScreen {
   private readonly shareBtn: HTMLButtonElement;
   private readonly hero: HTMLElement;
   private readonly panel: HTMLElement;
+  private stripSlot!: HTMLElement;
   private readonly trophies: HTMLImageElement[];
   private again!: HTMLButtonElement;
   private posterBtn!: HTMLButtonElement;
@@ -440,6 +444,7 @@ export class ResultsScreen {
       (this.panel = h('div', { class: 'panel results-panel' }, [
         h('div', { class: 'results-head' }, [this.trophies[0]!, this.title, this.trophies[1]!]),
         this.sub,
+        (this.stripSlot = h('div', { class: 'strip-slot' })),
         h('div', { class: 'rhero' }, [this.hero, h('div', { class: 'rhero-l', text: 'FANS EARNED' })]),
         this.body,
         h('div', { class: 'row' }, [
@@ -473,6 +478,7 @@ export class ResultsScreen {
         : 'The crowd will not stop screaming. Festival season is calling.'
       : `The silence took ${r.venueName}. The crowd wants more.`;
     clear(this.body);
+    this.stripSlot.replaceChildren(...(r.strip ? [r.strip] : []));
     this.hero.textContent = '+0';
     const target = r.fans;
     const t0 = performance.now();
@@ -589,7 +595,7 @@ export class MerchScreen {
   private readonly body: HTMLElement;
   private readonly fans: HTMLElement;
   private readonly tabs: HTMLButtonElement[];
-  private tab: 'instruments' | 'upgrades' = 'instruments';
+  private tab: 'instruments' | 'upgrades' | 'badges' = 'instruments';
   private last: SaveData | null = null;
 
   constructor(
@@ -598,6 +604,7 @@ export class MerchScreen {
     private readonly a: {
       buy(id: InstrumentId): void;
       buyUpgrade(id: UpgradeId): void;
+      skin(id: SkinId): void;
       loudness(n: number): void;
       close(): void;
     },
@@ -605,7 +612,7 @@ export class MerchScreen {
     this.el = overlay('merch', 'Merch table');
     this.fans = h('div', { class: 'fans-count' });
     this.body = h('div', { class: 'merch-body' });
-    const tab = (id: 'instruments' | 'upgrades', label: string): HTMLButtonElement =>
+    const tab = (id: 'instruments' | 'upgrades' | 'badges', label: string): HTMLButtonElement =>
       h('button', {
         class: 'merch-tab',
         type: 'button',
@@ -617,7 +624,7 @@ export class MerchScreen {
           },
         },
       });
-    this.tabs = [tab('instruments', 'INSTRUMENTS'), tab('upgrades', 'UPGRADES')];
+    this.tabs = [tab('instruments', 'INSTRUMENTS'), tab('upgrades', 'UPGRADES'), tab('badges', 'BADGES & MICS')];
     this.el.append(
       h('div', { class: 'panel' }, [
         h('div', { class: 'merch-head' }, [h('div', { class: 'panel-title big', text: 'MERCH TABLE' }), this.fans]),
@@ -633,7 +640,8 @@ export class MerchScreen {
   open(save: SaveData): void {
     this.last = save;
     this.fans.textContent = `${formatInt(save.fans)} FANS`;
-    this.tabs.forEach((t, i) => t.classList.toggle('on', (i === 0) === (this.tab === 'instruments')));
+    const order = ['instruments', 'upgrades', 'badges'] as const;
+    this.tabs.forEach((t, i) => t.classList.toggle('on', order[i] === this.tab));
     clear(this.body);
     const grid = h('div', { class: 'merch-grid' });
     if (this.tab === 'instruments') {
@@ -654,6 +662,43 @@ export class MerchScreen {
         item.style.setProperty('--rarity', RARITY_COLOR[d.rarity]);
         grid.append(item);
       }
+    } else if (this.tab === 'badges') {
+      grid.classList.add('badges');
+      const owned = ownedSkins(save.badges);
+      // the mic rack: every skin, locked ones shown dark with the badge that unlocks them
+      const rack = h('div', { class: 'mic-rack' });
+      for (const id of SKIN_IDS) {
+        const k = SKINS[id];
+        const have = owned.includes(id);
+        const from = BADGE_IDS.find((b) => BADGES[b].skin === id);
+        const el = h(
+          'button',
+          {
+            class: `mic-skin${have ? '' : ' locked'}${save.skin === id ? ' on' : ''}`,
+            type: 'button',
+            on: { click: () => have && this.a.skin(id) },
+          },
+          [
+            h('img', { src: this.icons.mic(k), alt: '' }),
+            h('div', { class: 'merch-name', text: k.name.toUpperCase() }),
+            h('div', { class: 'merch-desc', text: have ? (save.skin === id ? 'ON STAGE' : 'tap to use') : `badge: ${from ? BADGES[from].name : ''}` }),
+          ],
+        );
+        rack.append(el);
+      }
+      grid.append(h('div', { class: 'loud-title', text: 'MICS' }), rack, h('div', { class: 'loud-title', text: `TOUR BADGES ${save.badges.length}/${BADGE_IDS.length}` }));
+      const wall = h('div', { class: 'badge-wall' });
+      for (const id of BADGE_IDS) {
+        const b = BADGES[id];
+        const got = save.badges.includes(id);
+        const el = h('div', { class: `badge${got ? ' got' : ''}` }, [
+          h('div', { class: 'badge-medal', text: got ? '★' : '?' }),
+          h('div', {}, [h('div', { class: 'badge-name', text: b.name.toUpperCase() }), h('div', { class: 'badge-how', text: b.how })]),
+        ]);
+        el.style.setProperty('--bc', b.color);
+        wall.append(el);
+      }
+      grid.append(wall);
     } else {
       grid.classList.add('upgrades');
       for (const id of UPGRADE_IDS) {

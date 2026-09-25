@@ -3,6 +3,7 @@ import { INSTRUMENT_IDS } from '../seq/instruments';
 import type { GrooveId } from '../seq/grooves';
 import { GROOVE_IDS } from '../seq/grooves';
 import { emptyUpgrades, maxLevel, UPGRADE_IDS, type UpgradeLevels } from '../seq/upgrades';
+import { BADGE_IDS, ownedSkins, type BadgeId, type SkinId } from '../seq/badges';
 
 /**
  * Persistent meta-progression. Everything read from localStorage is treated as untrusted:
@@ -38,6 +39,10 @@ export interface SaveData {
   setlist: string;
   /** permanent upgrades bought at the merch table */
   upgrades: UpgradeLevels;
+  /** tour badges earned */
+  badges: BadgeId[];
+  /** the mic skin in use (must be unlocked by a badge) */
+  skin: SkinId;
 }
 
 const KEY = 'encore.save.v1';
@@ -75,6 +80,8 @@ export function defaultSave(): SaveData {
     seenTutorial: false,
     setlist: 'garage',
     upgrades: emptyUpgrades(),
+    badges: [],
+    skin: 'classic',
   };
 }
 
@@ -127,6 +134,9 @@ export function sanitize(raw: unknown): SaveData {
       if (Object.prototype.hasOwnProperty.call(u, id)) d.upgrades[id] = Math.floor(num(u[id], 0, maxLevel(id), 0));
     }
   }
+  d.badges = whitelist(r.badges, BADGE_IDS);
+  // a skin only counts if a badge actually unlocked it
+  d.skin = typeof r.skin === 'string' && (ownedSkins(d.badges) as string[]).includes(r.skin) ? (r.skin as SkinId) : 'classic';
   if (r.dailyBest && typeof r.dailyBest === 'object') {
     const entries = Object.entries(r.dailyBest as Record<string, unknown>)
       .filter(([k, v]) => DATE_KEY.test(k) && typeof v === 'number' && Number.isFinite(v))

@@ -23,9 +23,10 @@ import { GROOVES, GROOVE_IDS, type GrooveId } from '../seq/grooves';
 import { INSTRUMENTS, INSTRUMENT_IDS, type InstrumentId } from '../seq/instruments';
 import { SETLISTS, SETLIST_IDS, type SetlistId } from '../seq/setlists';
 import { nextCost, type UpgradeId } from '../seq/upgrades';
+import { BADGES, SKINS, type BadgeId, type SkinId } from '../seq/badges';
 import { BackstageScreen, type ShopItem } from '../ui/backstage';
 import { describeCard } from '../ui/cardInfo';
-import { h } from '../ui/dom';
+import { h, tourStrip } from '../ui/dom';
 import { downloadBlob, renderPoster } from '../ui/poster';
 import { DraftScreen } from '../ui/draft';
 import { Hud } from '../ui/hud';
@@ -128,6 +129,8 @@ export class Game {
   /** seconds left in the headliner's entrance (letterbox, spotlight, name slam) */
   private bossIntroT = 0;
   private bossHealed = 0;
+  /** took any damage in this venue (Flawless Set badge) */
+  private hitThisVenue = false;
   /** dev only: camera override for inspecting stages */
   private debugCam: { distance: number; pitch: number } | null = null;
   /** dev: damage taken per source, for balance runs */
@@ -206,6 +209,7 @@ export class Game {
     this.icons = new IconFactory(this.stage.renderer, this.env);
     this.numbers = new DamageNumbers();
 
+    this.playerModel.setSkin(SKINS[this.save.skin]);
     this.venue = new Basement();
     this.enemies = new EnemyManager(this.venue.palette.rim, this.venue.palette.floor);
     this.applyVenueLook();
@@ -280,6 +284,7 @@ export class Game {
     this.merch = new MerchScreen(uiRoot, this.icons, {
       buy: (id) => this.buyUnlock(id),
       buyUpgrade: (id) => this.buyUpgrade(id),
+      skin: (id) => this.setSkin(id),
       loudness: (n) => {
         this.save.loudness = n;
         writeSave(this.save);
@@ -464,6 +469,7 @@ export class Game {
     this.bossDownT = 0;
     this.bossIntroT = 0;
     this.finaleT = -1;
+    this.hitThisVenue = false;
     this.hud.setCinematic(false);
     this.player.x = 0;
     this.player.z = 4;
@@ -493,6 +499,11 @@ export class Game {
     this.hud.boss(null);
     this.state = 'playing';
     this.muffleTarget = 0;
+    if (index === FESTIVAL_START) {
+      // the clubs are done: a big card, a roar, and the stage opens up
+      this.schedule(0.2, () => this.hud.bossCard('FESTIVAL SEASON', 'three fields · bigger every time', '#ffb13d', 'THE TOUR GOES OUTSIDE'));
+      V.crowdCheer(this.audio, this.audio.now + 0.2, 1.2, 4);
+    }
     const loopTag = run.loop > 0 ? ` · AFTER HOURS ${run.loop}` : '';
     this.hud.announce(this.venue.name + loopTag, this.venue.tagline, '#' + this.venue.palette.accents[0]!.toString(16).padStart(6, '0'), 3.4);
     V.crowdCheer(this.audio, this.audio.now + 0.1, 0.4 + index * 0.3, 3);
@@ -607,6 +618,12 @@ export class Game {
       newBestHit,
       trophy: won ? this.icons.goldRecord() : undefined,
       tier: run.venueIndex >= TOUR_FINAL ? 'world' : run.venueIndex >= CLUB_FINAL ? 'club' : undefined,
+      strip: tourStrip(
+        TOUR.map((t) => t.name),
+        FESTIVAL_START,
+        won ? -1 : run.venueIndex,
+        run.venueIndex + (won ? 1 : 0),
+      ),
       nextUnlock: next ? { name: INSTRUMENTS[next].name, cost: UNLOCK_COST[next]!, have: this.save.fans, icon: this.icons.instrument(next) } : undefined,
       rumour,
     });
@@ -733,6 +750,14 @@ export class Game {
     this.music.fanfare(true);
     this.merch.open(this.save);
     this.title.update(this.save, dailyKey(new Date()));
+  }
+
+  private setSkin(id: SkinId): void {
+    this.save.skin = id;
+    writeSave(this.save);
+    this.playerModel.setSkin(SKINS[id]);
+    V.bell(this.audio, this.audio.now, 79, 0.6);
+    this.merch.open(this.save);
   }
 
   private buyUpgrade(id: UpgradeId): void {
@@ -1226,6 +1251,7 @@ export class Game {
     this.perfectChain = this.time - this.lastPerfectAt < 3.2 ? this.perfectChain + 1 : 1;
     this.lastPerfectAt = this.time;
     const chain = this.perfectChain;
+    if (chain >= 8) this.award('metronome');
     p.invuln = Math.max(p.invuln, 0.5);
     if (run.pedals.metronome > 0 && p.charges < p.maxCharges) p.charges++;
     this.addHype(0.08 + Math.min(4, chain - 1) * 0.02);
@@ -1433,6 +1459,7 @@ export class Game {
       let m = run.hitMilestone;
       while (m * 10 <= dmg) m *= 10;
       run.hitMilestone = m * 10;
+      if (dmg >= 1e6) this.award('million');
       this.celebrate(`NEW RECORD HIT · ${formatInt(m)}+`, formatInt(Math.round(dmg)), 'damage from a single note', '#ffc53d', e.x, e.z);
     }
     if (!o.quiet) {
@@ -1531,6 +1558,8 @@ export class Game {
     this.music.plink(this.streak);
     if (this.audio.allowHit(3)) V.shh(this.audio, this.audio.now, 0.8);
     this.addHype(e.elite ? 0.12 : 0.0045 + (e.kind === 'mute' ? 0.004 : 0));
+    if (run.kills === 100) this.award('opening');
+    if (this.streak === 500) this.award('unstoppable');
     if (KILL_MILESTONES.includes(run.kills)) this.celebrate('THE CROWD IS COUNTING', formatInt(run.kills), 'silenced this show', '#3dffb0', e.x, e.z);
     // streak milestones
     const ms = [25, 50, 100, 200, 400, 800, 1600, 3200];
@@ -1553,6 +1582,18 @@ export class Game {
       });
     }
     this.healAcc += n;
+  }
+
+  /** Earn a tour badge (once ever): a plaque, a bell run, and a new mic skin if it has one. */
+  private award(id: BadgeId): void {
+    if (this.save.badges.includes(id)) return;
+    this.save.badges.push(id);
+    writeSave(this.save);
+    const b = BADGES[id];
+    const sub = b.skin ? `${b.how} · unlocked the ${SKINS[b.skin].name.toUpperCase()} mic` : b.how;
+    this.hud.plaque('TOUR BADGE EARNED', b.name.toUpperCase(), sub, b.color);
+    const t = this.audio.now;
+    [67, 71, 74, 79, 83].forEach((n, i) => V.bell(this.audio, t + i * 0.05, n, 0.55));
   }
 
   /** A plaque slides in from the left: the numbers are getting silly and the game says so. */
@@ -1684,6 +1725,7 @@ export class Game {
     const run = this.run!;
     if (p.invuln > 0 || p.dashT > 0 || this.state !== 'playing' || this.godMode) return;
     run.hp -= amount;
+    this.hitThisVenue = true;
     if (import.meta.env.DEV) this.hurtLog[source] = (this.hurtLog[source] ?? 0) + amount;
     p.invuln = 0.9;
     const dx = p.x - fromX;
@@ -1738,6 +1780,7 @@ export class Game {
     const p = this.player;
     this.dropState = 'active';
     run.drops++;
+    if (run.drops >= 5) this.award('addict');
     const color = new THREE.Color(this.venue.palette.accents[0]!);
     const dmg = 90 * (1 + run.level * 0.2) * run.stats.dmgMult * (1 + run.venueIndex * 1.5);
     this.enemies.hash.query(p.x, p.z, 24, (i) => {
@@ -1902,6 +1945,9 @@ export class Game {
     // everything on the field dies with the headliner; after the last one it goes out as a
     // ripple from where the Hush stood, so the room visibly empties in a wave of pops
     const final = isFinalStop(run.venueIndex);
+    if (!this.hitThisVenue) this.award('flawless');
+    if (run.venueIndex === CLUB_FINAL) this.award('club');
+    if (run.venueIndex === TOUR_FINAL) this.award('world');
     for (const e of this.enemies.list) {
       if (!e.alive) continue;
       // the headliner's own adds lose their puppeteer and pop like everyone else
@@ -2133,6 +2179,8 @@ export class Game {
     if (firstEver) {
       this.save.grooves.push(g);
       writeSave(this.save);
+      if (this.save.grooves.length >= 5) this.award('digger');
+      if (this.save.grooves.length >= GROOVE_IDS.length) this.award('genres');
     }
     this.queueStamp(() => {
       this.music.fanfare(true);
@@ -2264,6 +2312,7 @@ export class Game {
       case 'instrument':
         run.pattern.addTrack(card.inst);
         this.pendingIntros.push(card.inst);
+        if (run.pattern.tracks.length >= 8) this.award('fullband');
         ed.rebuild();
         ed.focusTrack = run.pattern.tracks.length - 1;
         break;
@@ -2291,6 +2340,7 @@ export class Game {
           t.evolved = true;
           run.pattern.version++;
           run.evolvedNow.add(card.inst);
+          this.award('evolution');
           const evo = INSTRUMENTS[card.inst].evolution;
           const nm = INSTRUMENTS[card.inst].name.toUpperCase();
           this.queueStamp(() => {
@@ -2456,6 +2506,12 @@ export class Game {
       'BACKSTAGE',
       `${stopName(run.venueIndex)} headlined. Spend your tips, rework the machine — next up is a bigger ${TOUR[run.venueIndex + 1]?.tier === 'festival' ? 'field' : 'room'}.`,
       `WALK OUT TO ${next} ▸`,
+      tourStrip(
+        TOUR.map((t) => t.name),
+        FESTIVAL_START,
+        run.venueIndex + 1,
+        run.venueIndex + 1,
+      ),
     );
     this.renderShop();
     V.crowdCheer(this.audio, this.audio.now, 0.3, 2);
@@ -2778,6 +2834,7 @@ export class Game {
       hype: () => this.run && (this.run.hype = 1),
       skip: (t = 999) => this.run && (this.run.setTime = t),
       venue: (i: number) => this.run && this.beginVenue(i),
+      badge: (id: BadgeId) => this.award(id),
       /** inspect a stage: override camera distance/pitch (cam(0) restores the follow cam) */
       cam: (distance = 0, pitch = 0.98) => (this.debugCam = distance > 0 ? { distance, pitch } : null),
       god: () => (this.godMode = true),

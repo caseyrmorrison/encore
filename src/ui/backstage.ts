@@ -27,6 +27,7 @@ export class BackstageScreen {
   private readonly rerollBtn: HTMLButtonElement;
   private readonly nextBtn: HTMLButtonElement;
   private readonly editorSlot: HTMLElement;
+  private readonly stripSlot: HTMLElement;
 
   constructor(
     root: HTMLElement,
@@ -40,9 +41,10 @@ export class BackstageScreen {
     this.rerollBtn = h('button', { class: 'btn ghost', type: 'button', on: { click: () => a.reroll() } });
     this.nextBtn = h('button', { class: 'btn primary big', type: 'button', on: { click: () => a.next() } });
     this.editorSlot = h('div', { class: 'editor-slot' });
+    this.stripSlot = h('div', { class: 'strip-slot' });
     this.el = h('div', { class: 'overlay backstage hidden', role: 'dialog', aria: { label: 'Backstage' } }, [
       this.tips,
-      h('div', { class: 'draft-head' }, [this.title, this.sub]),
+      h('div', { class: 'draft-head' }, [this.title, this.sub, this.stripSlot]),
       this.shop,
       h('div', { class: 'draft-actions' }, [this.healBtn, this.rerollBtn, h('div', { class: 'spacer' }), this.nextBtn]),
       this.editorSlot,
@@ -55,9 +57,10 @@ export class BackstageScreen {
     this.editorSlot.append(el);
   }
 
-  open(title: string, sub: string, nextLabel: string): void {
+  open(title: string, sub: string, nextLabel: string, strip?: HTMLElement): void {
     this.title.textContent = title;
     this.sub.textContent = sub;
+    this.stripSlot.replaceChildren(...(strip ? [strip] : []));
     this.nextBtn.textContent = nextLabel;
     show(this.el, true);
   }

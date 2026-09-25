@@ -62,4 +62,12 @@ describe('save sanitising', () => {
     const s = sanitize(JSON.parse('{"upgrades": {"__proto__": {"amp": 5}}}'));
     expect(s.upgrades.amp).toBe(0);
   });
+
+  it('keeps known badges and only unlocked skins', () => {
+    const s = sanitize({ badges: ['club', 'nope', 'club', 'digger'], skin: 'gold' });
+    expect(s.badges).toEqual(['club', 'digger']);
+    expect(s.skin).toBe('gold');
+    expect(sanitize({ badges: ['digger'], skin: 'gold' }).skin).toBe('classic');
+    expect(sanitize({ badges: [], skin: '<script>' }).skin).toBe('classic');
+  });
 });

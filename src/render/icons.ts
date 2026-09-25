@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { INSTRUMENT_IDS, type InstrumentId } from '../seq/instruments';
 import { PEDALS, PEDAL_IDS, type PedalId } from '../seq/cards';
 import { PlayerModel } from './playerModel';
+import type { SkinDef } from '../seq/badges';
 import {
   buildBolt,
   buildGear,
@@ -81,10 +82,11 @@ export class IconFactory {
     return this.get('picks', () => buildPicks());
   }
 
-  /** The hero, rendered from the in-game model. */
-  mic(): string {
-    return this.get('mic', () => {
+  /** The hero, rendered from the in-game model (optionally in a skin). */
+  mic(skin?: SkinDef): string {
+    return this.get(`mic:${skin?.id ?? 'classic'}`, () => {
       const pm = new PlayerModel();
+      if (skin) pm.setSkin(skin);
       pm.update(0, 0, 0, 0, 0.6, 0.2, 0.5, new Float32Array(16), false, false);
       const g = new THREE.Group();
       g.add(pm.body);
@@ -94,7 +96,7 @@ export class IconFactory {
         const m = o.material as THREE.Material & { side?: THREE.Side; color?: THREE.Color; emissiveIntensity?: number };
         // outline shells vanish on a dark card; the handle needs a little sheen
         if (m.side === THREE.BackSide) o.visible = false;
-        if (m instanceof THREE.MeshStandardMaterial && m.color.getHex() === 0x17161b) {
+        if (!skin && m instanceof THREE.MeshStandardMaterial && m.color.getHex() === 0x17161b) {
           o.material = new THREE.MeshStandardMaterial({ color: 0x6a6878, roughness: 0.3, metalness: 0.7 });
         }
         if (m instanceof THREE.MeshStandardMaterial && m.emissiveIntensity !== undefined && m.emissiveIntensity > 0.5) m.emissiveIntensity = 2.2;

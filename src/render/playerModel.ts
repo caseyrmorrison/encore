@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { SkinDef } from '../seq/badges';
 import { canvasTexture, M } from './materials';
 
 /**
@@ -15,6 +16,10 @@ export class PlayerModel {
   private readonly grille: THREE.Mesh;
   private readonly halo: THREE.InstancedMesh;
   private readonly haloMat: THREE.MeshBasicMaterial;
+  private grilleMat!: THREE.MeshPhysicalMaterial;
+  private bandMat!: THREE.MeshStandardMaterial;
+  private handleMat!: THREE.MeshStandardMaterial;
+  private badgeMat!: THREE.MeshStandardMaterial;
   private readonly beatRing: THREE.Mesh;
   private readonly beatRingMat: THREE.MeshBasicMaterial;
   /** drawn over everything: you can always find yourself inside a horde */
@@ -37,6 +42,20 @@ export class PlayerModel {
   private readonly tail = new THREE.Vector3();
 
   /** gameplay-only floor helpers (beat ring, light pool) */
+  /** Dress the mic in a skin (unlocked by tour badges). */
+  setSkin(k: SkinDef): void {
+    this.grilleMat.color.setHex(k.grille);
+    this.grilleMat.emissive.setHex(k.glow);
+    this.grilleMat.emissiveIntensity = k.glow ? 0.9 : 0;
+    this.grilleMat.iridescence = k.iridescent ? 1 : 0;
+    this.bandMat.color.setHex(k.band);
+    this.handleMat.color.setHex(k.handle);
+    this.handleMat.metalness = k.id === 'classic' ? 0.25 : 0.6;
+    this.handleMat.roughness = k.id === 'classic' ? 0.55 : 0.28;
+    this.badgeMat.color.setHex(0);
+    this.badgeMat.emissive.setHex(k.badge);
+  }
+
   set showFloorFx(on: boolean) {
     this.beatRing.visible = on;
     this.glowPool.visible = on;
@@ -77,27 +96,33 @@ export class PlayerModel {
     grilleTex.wrapS = THREE.RepeatWrapping;
     grilleTex.wrapT = THREE.RepeatWrapping;
     grilleTex.repeat.set(2, 2);
-    const grilleMat = new THREE.MeshStandardMaterial({
+    const grilleMat = new THREE.MeshPhysicalMaterial({
       color: 0xf2f4fa,
       metalness: 1,
       roughness: 0.18,
       alphaMap: grilleTex,
       alphaTest: 0.5,
       side: THREE.DoubleSide,
+      iridescenceIOR: 1.6,
+      iridescenceThicknessRange: [200, 900],
     });
+    this.grilleMat = grilleMat;
     this.grille = new THREE.Mesh(new THREE.SphereGeometry(0.8, 40, 28, 0, Math.PI * 2, 0, Math.PI * 0.78), grilleMat);
     this.mic.add(this.grille);
     const seam = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.05, 10, 48), M.chrome());
     seam.rotation.x = Math.PI / 2;
     this.mic.add(seam);
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.58, 0.28, 32), M.gold());
+    this.bandMat = M.gold().clone();
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.58, 0.28, 32), this.bandMat);
     band.position.y = -0.72;
     this.mic.add(band);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0x17161b, roughness: 0.55, metalness: 0.25 });
+    this.handleMat = handleMat;
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.3, 2.3, 32), handleMat);
     handle.position.y = -2.0;
     this.mic.add(handle);
-    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.49, 0.1, 32), M.glow(0xff2d78, 2));
+    this.badgeMat = M.glow(0xff2d78, 2).clone();
+    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.49, 0.1, 32), this.badgeMat);
     badge.position.y = -1.35;
     this.mic.add(badge);
     const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.35, 20), M.chrome());
