@@ -146,6 +146,27 @@ const S = {
     await shot('win-results');
     console.log('state', await E(() => window.__encore.state()));
   },
+  /** Social preview: the victory lap wide shot (the LED wall spells the title). Use --w=1200 --h=630. */
+  async ogfinale() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      d.god();
+      for (const i of ['hat', 'bass', 'lead', 'clap']) d.give(i);
+      d.venue(2);
+      const cols = [0xff3b5c, 0xff9a2e, 0xffe14d, 0x2ee6ff, 0x8cff5a, 0xff4df0, 0xb04dff];
+      for (let i = 0; i < 160; i++) d.game.paint.splat((Math.random() - 0.5) * 50, (Math.random() - 0.5) * 36, 1 + Math.random(), cols[i % cols.length], 1);
+      d.skip(999);
+    });
+    await sleep(3500);
+    await E(() => {
+      const g = window.__encore.game;
+      if (g.boss?.entry) g.boss.entry.hp = 1;
+    });
+    await sleep(5200);
+    await E(() => document.getElementById('ui').style.setProperty('visibility', 'hidden'));
+    await shot('og');
+  },
   async og() {
     await start();
     await E(() => {
@@ -160,6 +181,13 @@ const S = {
       d.hype();
       g.player.x = -4;
       g.player.z = 2;
+      // a floor that's already been painted by the show so far
+      const cols = [0xff3b5c, 0xff9a2e, 0xffe14d, 0x2ee6ff, 0x8cff5a, 0xff4df0, 0xb04dff];
+      for (let i = 0; i < 260; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = 3 + Math.random() * 16;
+        g.paint.splat(-4 + Math.cos(a) * r * 1.4, 2 + Math.sin(a) * r, 0.9 + Math.random() * 1.2, cols[i % cols.length], 1);
+      }
     });
     await dance(2500);
     await page.keyboard.press('KeyQ');
