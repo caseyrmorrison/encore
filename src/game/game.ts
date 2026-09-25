@@ -19,7 +19,7 @@ import { clampToBounds, pushOutOfObstacles, type Venue } from '../render/venues/
 import { Basement } from '../render/venues/basement';
 import { Cathedral } from '../render/venues/cathedral';
 import { Mainstage } from '../render/venues/mainstage';
-import { cardRarity, drawGoldOffers, drawOffers, PEDALS, type Card, type DraftContext, type PedalId } from '../seq/cards';
+import { cardRarity, drawGoldOffers, drawOffers, drawShopStock, PEDALS, type Card, type DraftContext, type PedalId } from '../seq/cards';
 import { GROOVES, type GrooveId } from '../seq/grooves';
 import { INSTRUMENTS, type InstrumentId } from '../seq/instruments';
 import { SETLISTS, SETLIST_IDS, type SetlistId } from '../seq/setlists';
@@ -73,6 +73,8 @@ interface Player {
 
 const VENUE_NAMES = ['THE BASEMENT', 'THE CATHEDRAL', 'THE MAINSTAGE'];
 
+const KILL_MILESTONES = [500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+
 export class Game {
   private readonly stage: Stage;
   private readonly rig: CameraRig;
@@ -121,6 +123,9 @@ export class Game {
   private director: Director | null = null;
   private boss: Boss | null = null;
   private bossDownT = 0;
+  /** seconds left in the headliner's entrance (letterbox, spotlight, name slam) */
+  private bossIntroT = 0;
+  private bossHealed = 0;
   /** seconds since the final headliner fell (-1 = no finale): drives the victory lap camera */
   private finaleT = -1;
   private readonly player: Player = {
@@ -440,6 +445,7 @@ export class Game {
     this.director = new Director(index, run.loop, run.spawnRng);
     this.boss = null;
     this.bossDownT = 0;
+    this.bossIntroT = 0;
     this.finaleT = -1;
     this.hud.setCinematic(false);
     this.player.x = 0;
@@ -886,6 +892,10 @@ export class Game {
       this.hud.boss(this.boss.name, this.boss.hpFrac, this.boss.armor < 0.5);
       if (this.boss.entry && !this.boss.entry.alive && !this.boss.dead) this.onBossDefeated();
     }
+    if (this.bossIntroT > 0) {
+      this.bossIntroT -= rawDt;
+      if (this.bossIntroT <= 0) this.endBossIntro();
+    }
     if (this.bossDownT > 0) {
       this.bossDownT -= rawDt;
       if (this.bossDownT <= 0) this.afterBoss();
@@ -1223,7 +1233,7 @@ export class Game {
       const orders = this.director.onBeat(run.setTime, this.transport.stepDur * 4, this.enemies.aliveCount, !!this.boss);
       for (const o of orders) this.release(o.kind, o.count, o.elite, o.ring);
     }
-    if (this.boss && !this.boss.dead && this.boss.entry?.alive) this.boss.onStep(this.bossCtx, ev.step, ev.bar);
+    if (this.boss && !this.boss.dead && this.boss.entry?.alive && this.bossIntroT <= 0) this.boss.onStep(this.bossCtx, ev.step, ev.bar);
     // THE ONE: downbeat nova
     if (ev.step === 0 && run.grooves.active.has('downbeat')) {
       const r = 6 * run.stats.area;
@@ -1341,6 +1351,12 @@ export class Game {
     if (o.slow) e.slow = Math.max(e.slow, o.slow);
     run.damage += dmg;
     if (dmg > run.bestHit) run.bestHit = dmg;
+    if (dmg >= run.hitMilestone) {
+      let m = run.hitMilestone;
+      while (m * 10 <= dmg) m *= 10;
+      run.hitMilestone = m * 10;
+      this.celebrate('NEW RECORD HIT', formatInt(m), 'damage from a single note', '#ffc53d', e.x, e.z);
+    }
     if (!o.quiet) {
       // accumulate; flushed as one number per enemy every ~0.18s (or on death)
       if (e.numAcc === 0) e.numT = 0.28;
@@ -1435,6 +1451,7 @@ export class Game {
     this.music.plink(this.streak);
     if (this.audio.allowHit(3)) V.shh(this.audio, this.audio.now, 0.8);
     this.addHype(e.elite ? 0.12 : 0.0045 + (e.kind === 'mute' ? 0.004 : 0));
+    if (KILL_MILESTONES.includes(run.kills)) this.celebrate('THE CROWD IS COUNTING', formatInt(run.kills), 'silenced this show', '#3dffb0', e.x, e.z);
     // streak milestones
     const ms = [25, 50, 100, 200, 400, 800, 1600, 3200];
     if (ms.includes(this.streak)) {
@@ -1443,6 +1460,17 @@ export class Game {
       this.hud.streakCallout(w);
       V.crowdCheer(this.audio, this.audio.now, 0.4 + ms.indexOf(this.streak) * 0.1, 2);
     }
+  }
+
+  /** A plaque slides in from the left: the numbers are getting silly and the game says so. */
+  private celebrate(kicker: string, value: string, sub: string, color: string, x: number, z: number): void {
+    this.hud.plaque(kicker, value, sub, color);
+    const c = new THREE.Color(color);
+    this.ground.add(GroundKind.Shock, x, z, 0.5, 9, 0.6, c, { thickness: 0.07 });
+    this.glow.burst(x, 1.5, z, 40, c, 14, { vy: 8, life: 0.9, size: 0.4, shape: Shape.Spark, gravity: 6 });
+    const t = this.audio.now;
+    [72, 76, 79, 84].forEach((n, i) => V.bell(this.audio, t + i * 0.07, n, 0.5));
+    V.crowdCheer(this.audio, t + 0.1, 0.6, 2);
   }
 
   private addHype(n: number): void {
@@ -1710,12 +1738,37 @@ export class Game {
     const run = this.run!;
     const healed = Math.round(run.stats.maxHp * 0.3);
     run.hp = Math.min(run.stats.maxHp, run.hp + healed);
-    this.hud.toast(`THE CROWD ROARS  +${healed} HEALTH`, '#3dffb0');
-    this.hud.announce(this.boss.name, this.boss.title, '#' + this.boss.color.toString(16).padStart(6, '0'), 3.5);
+    this.bossHealed = healed;
+    // the entrance: bars close in, time drags, one spotlight finds the headliner
+    this.hud.dismissStamps();
+    this.hud.clearToasts();
+    const css = '#' + this.boss.color.toString(16).padStart(6, '0');
+    this.bossIntroT = 2.6;
+    this.slowMo = Math.max(this.slowMo, 2.2);
+    p.invuln = Math.max(p.invuln, 3);
+    this.hud.setCinematic(true);
+    this.hud.bossCard(this.boss.name, this.boss.title, css, VENUE_NAMES[run.venueIndex] ?? '');
+    this.beams.add(bx, 0, bz, bx, 40, bz, 6, this.boss.color, 2.4);
+    this.beams.add(bx, 0, bz, bx, 40, bz, 2.2, 0xffffff, 2.4);
+    this.ground.add(GroundKind.Disc, bx, bz, 3, 9, 2.4, this.boss.color, { alpha: 0.4 });
     V.roar(this.audio, this.audio.now, 1);
     V.impact(this.audio, this.audio.now + 0.05, 0.9);
+    V.gong(this.audio, this.audio.now + 0.1, 0.7);
+    V.crowdCheer(this.audio, this.audio.now + 0.3, 0.7, 2.5);
     this.rig.addTrauma(0.6 * this.save.settings.shake);
     this.ground.add(GroundKind.Shock, bx, bz, 1, 16, 0.8, this.boss.color, { thickness: 0.06 });
+  }
+
+  /** The entrance ends: chrome returns and the fight starts with a shove of sound. */
+  private endBossIntro(): void {
+    const boss = this.boss;
+    this.hud.setCinematic(false);
+    if (!boss?.entry) return;
+    this.hud.toast(`THE CROWD ROARS  +${this.bossHealed} HEALTH`, '#3dffb0');
+    V.impact(this.audio, this.audio.now, 1);
+    V.crash(this.audio, this.audio.now + 0.02, 0.8);
+    this.rig.punch(6, 2);
+    this.ground.add(GroundKind.Shock, boss.x, boss.z, 1, 22, 0.7, boss.color, { thickness: 0.05 });
   }
 
   private onBossDefeated(): void {
@@ -1982,7 +2035,7 @@ export class Game {
   private processStamps(dt: number): void {
     this.stampCooldown -= dt;
     if (this.stampCooldown > 0 || !this.stampQueue.length) return;
-    if (this.dropState === 'queued' || this.dropState === 'active') return;
+    if (this.dropState === 'queued' || this.dropState === 'active' || this.bossIntroT > 0) return;
     this.stampQueue.shift()!();
     this.stampCooldown = 2.4;
   }
@@ -2282,7 +2335,7 @@ export class Game {
   private stockShop(): void {
     const run = this.run!;
     const ctx = { ...this.draftContext(), luck: 0.3 };
-    const cards = [...drawOffers(ctx, run.lootRng, 3), ...drawGoldOffers(ctx, run.lootRng, 1)];
+    const cards = drawShopStock(ctx, run.lootRng);
     const price = (c: Card): number => {
       const r = cardRarity(c);
       return (r === 'common' ? 25 : r === 'rare' ? 45 : r === 'epic' ? 80 : 140) * (1 + run.venueIndex * 0.5);
@@ -2432,9 +2485,10 @@ export class Game {
     this.venue.occlude?.(p.x, p.z);
     const boss = this.boss && this.boss.entry?.alive ? this.boss : null;
     if (boss) {
-      // frame the duel: lean toward the headliner and pull back a little
-      const bx = clamp((boss.x - p.x) * 0.35, -9, 9);
-      const bz = clamp((boss.z - p.z) * 0.35, -7, 7);
+      // frame the duel: lean toward the headliner (all the way during its entrance)
+      const lean = this.bossIntroT > 0 ? 0.75 : 0.35;
+      const bx = clamp((boss.x - p.x) * lean, -12, 12);
+      const bz = clamp((boss.z - p.z) * lean, -10, 10);
       this.rig.setLookAhead(bx + p.aimX, bz + p.aimZ);
     } else {
       this.rig.setLookAhead(p.aimX * 2.2, p.aimZ * 1.6);

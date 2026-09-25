@@ -397,6 +397,36 @@ const S = {
     await dance(5000);
     await shot('boss');
   },
+  /** Milestone plaque: force the next record-hit threshold low so the first real hit trips it. */
+  async plaque() {
+    await start();
+    await E(() => {
+      window.__encore.god();
+      window.__encore.game.run.hitMilestone = 10;
+    });
+    await page.waitForFunction(() => document.querySelector('.plaque'), null, { timeout: 20000 });
+    await sleep(500);
+    await shot('plaque');
+  },
+  /** The headliner's entrance: letterbox, spotlight, name card. */
+  async intro() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      d.god();
+      d.venue(1);
+      d.give('hat');
+    });
+    await sleep(1500);
+    await E(() => window.__encore.skip(999));
+    await page.waitForFunction(() => !!window.__encore.game.boss, null, { timeout: 15000 });
+    await sleep(700);
+    await shot('intro-1');
+    await sleep(900);
+    await shot('intro-2');
+    await sleep(1600);
+    await shot('intro-3');
+  },
   async boss2() {
     await start();
     await E(() => {

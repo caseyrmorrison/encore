@@ -8,6 +8,9 @@ export type EditMode = { kind: 'free' } | { kind: 'fx'; fx: FxKind };
 
 const FX_GLYPH: Record<FxKind, string> = { accent: '⚡', ratchet: '×2', echo: '◎' };
 
+/** "Tap" on touch screens, "Click" everywhere else. */
+const verb = (): string => (document.documentElement.classList.contains('touch') ? 'Tap' : 'Click');
+
 export interface EditorEvents {
   placed(trackIndex: number, step: number): void;
   lifted(trackIndex: number, step: number): void;
@@ -181,11 +184,11 @@ export class SeqEditor {
     }
     const spareTotal = p.tracks.reduce((a, t) => a + t.spare, 0);
     if (this.mode.kind === 'fx') {
-      this.hint.textContent = `▶ Tap a step to add ${this.mode.fx.toUpperCase()}`;
+      this.hint.textContent = `▶ ${verb()} a step to add ${this.mode.fx.toUpperCase()}`;
     } else if (spareTotal > 0) {
-      this.hint.textContent = `▶ ${spareTotal} note${spareTotal > 1 ? 's' : ''} to place — click empty steps`;
+      this.hint.textContent = `▶ ${spareTotal} note${spareTotal > 1 ? 's' : ''} to place — ${verb().toLowerCase()} empty steps`;
     } else {
-      this.hint.textContent = 'Tap a lit step to lift it, then place it elsewhere';
+      this.hint.textContent = `${verb()} a lit step to lift it, then place it elsewhere`;
     }
     this.el.classList.toggle('placing', spareTotal > 0);
     this.renderGrooves(grooves);

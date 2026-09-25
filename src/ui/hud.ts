@@ -313,6 +313,20 @@ export class Hud {
     setTimeout(() => t.remove(), 2600);
   }
 
+  /** Milestone plaque on the left edge (the centre belongs to drops, stamps and bosses). */
+  plaque(kicker: string, value: string, sub: string, color: string): void {
+    const el = h('div', { class: 'plaque' }, [
+      h('div', { class: 'pl-kicker', text: kicker }),
+      h('div', { class: 'pl-value', text: value }),
+      h('div', { class: 'pl-sub', text: sub }),
+    ]);
+    el.style.setProperty('--pc', color);
+    for (const old of Array.from(this.el.querySelectorAll('.plaque'))) old.remove();
+    this.el.append(el);
+    setTimeout(() => el.classList.add('out'), 2600);
+    setTimeout(() => el.remove(), 3200);
+  }
+
   streakCallout(word: string): void {
     const c = h('div', { class: 'streak-callout', text: word });
     this.streak.append(c);
@@ -338,6 +352,22 @@ export class Hud {
       this.bottomMeasure = 30;
     }
     this.setBottomFade(screenY > this.bottomTopY - 60);
+  }
+
+  /** A headliner takes the stage: the name slams in over a slanted band of its colour. */
+  bossCard(name: string, title: string, color: string, venue: string): void {
+    const el = h('div', { class: 'bosscard' }, [
+      h('div', { class: 'bc-band' }),
+      h('div', { class: 'bc-kicker', text: venue ? `NOW HEADLINING ${venue}` : 'NOW HEADLINING' }),
+      h('div', { class: 'bc-name', text: name }),
+      h('div', { class: 'bc-title', text: title }),
+    ]);
+    el.style.setProperty('--bc', color);
+    show(this.banner, false);
+    this.bannerT = 0;
+    this.el.append(el);
+    setTimeout(() => el.classList.add('out'), 2300);
+    setTimeout(() => el.remove(), 2900);
   }
 
   /** Victory lap: the chrome steps aside so the show fills the screen. */

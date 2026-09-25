@@ -25,6 +25,9 @@ absurdly powerful until you're headlining the end of the world.
 
 Gamepads work too (left stick move, right stick aim, A/RB dash, B/LB drop).
 
+**Phones and tablets:** drag anywhere on the left half to move, tap **DASH** (on the beat!)
+and **DROP** on the right; weapons auto-aim. Landscape is best.
+
 ## Breaking the game (on purpose)
 
 - **Notes are attacks.** More lit steps = more shots. Move notes around between rounds.
@@ -35,6 +38,8 @@ Gamepads work too (left stick move, right stick aim, A/RB dash, B/LB drop).
 - **Evolutions.** Max an instrument and meet its hidden condition to transform it.
 - **Drops.** Fill hype, press `Q`: the game builds to the next downbeat and everything doubles.
 - **Encore.** Beat all three venues and keep your build for an endless, faster encore loop.
+- **Share a show.** Every run has a seed: *Copy result* or *Save poster* gives your friends a
+  `?seed=` link to play the exact same set.
 
 ## Tech
 
@@ -44,6 +49,8 @@ Gamepads work too (left stick move, right stick aim, A/RB dash, B/LB drop).
 - Every sound is synthesized live with WebAudio: drum voices, FM bells, formant choir,
   organ drawbars, a sample-accurate step scheduler and sidechain pumping.
 - Deterministic seeded runs (`Daily Setlist` is the same run for everyone, every UTC day).
+- Static site, no backend, no cookies, no network calls after load: a strict CSP
+  (`default-src 'none'`, Trusted Types) is baked into the page at build time.
 
 ```bash
 npm install
@@ -52,6 +59,7 @@ npm test           # vitest unit tests
 npm run lint && npm run typecheck
 npm run build      # static site in dist/
 npm run shots      # scripted screenshots + FPS via local Chrome (dev server must be running)
+node tools/shots.mjs touch --mobile --w=844 --h=390   # phone-sized touch run
 ```
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the design document and [SECURITY.md](SECURITY.md)

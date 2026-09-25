@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../src/core/rng';
-import { canEvolve, drawGoldOffers, drawOffers, emptyPedals, type DraftContext } from '../src/seq/cards';
+import { canEvolve, drawGoldOffers, drawOffers, drawShopStock, emptyPedals, type DraftContext } from '../src/seq/cards';
 import { detectGrooves } from '../src/seq/grooves';
 import { INSTRUMENT_IDS } from '../src/seq/instruments';
 import { Pattern, STEPS } from '../src/seq/pattern';
@@ -145,6 +145,19 @@ describe('draft', () => {
       for (const o of drawGoldOffers(ctx(p), rng)) {
         if (o.kind === 'pedal') expect(['overdrive', 'fuzz', 'metronome', 'wah', 'groupies', 'roadie', 'energy', 'ampstack', 'goldchain']).not.toContain(o.pedal);
       }
+    }
+  });
+
+  it('backstage stock never shows the same card twice', () => {
+    const p = new Pattern();
+    p.addTrack('kick');
+    p.addTrack('snare');
+    const rng = new Rng(21);
+    for (let i = 0; i < 300; i++) {
+      const stock = drawShopStock({ ...ctx(p), luck: 0.3 }, rng);
+      expect(stock).toHaveLength(4);
+      const keys = stock.map((c) => JSON.stringify(c));
+      expect(new Set(keys).size).toBe(keys.length);
     }
   });
 });

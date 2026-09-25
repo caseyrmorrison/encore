@@ -18,6 +18,7 @@
 ## The loop
 
 - Move `WASD`, aim with the mouse (or auto-aim), dash `SPACE`, drop `Q` / right-click.
+  On touch: a floating stick under the left thumb, DASH/DROP buttons under the right, auto-aim.
 - Kill The Hush → they burst into light and a quantized note (Rez-style, always in key).
 - Collect **notes** (XP) → level up → draft 1 of 3 cards → edit the pattern.
 - Elites drop **Gold Records** (a rare+ pick). Between venues: **Backstage** shop & free editing.
@@ -26,6 +27,20 @@
   2. **The Cathedral** — 124 BPM, D minor, marble + stained glass + organ pipes. Boss: **THE CANTOR**.
   3. **The Mainstage** — 136 BPM, E minor, festival stage, lasers, crowd of thousands. Boss: **THE HUSH**.
 - Win → **ENCORE** endless mode: +8 BPM and harder crowds every loop. This is where broken builds sing.
+
+## Big moments (the "make people happy" budget)
+
+Every accomplishment gets a dedicated, never-overlapping centre-screen beat:
+
+- **Headliner entrance** — letterbox bars, slow motion, one spotlight, the name slammed over a
+  band of the boss colour; the fight starts with a shove of sound when the bars open.
+- **DROP** — riser + filter sweep, a colour-heating 4-3-2-1 countdown above the performer, the
+  room darkens, then the downbeat detonates (light pillar, confetti cannons, floor strobes).
+  Groove stamps queue behind drops and each other; a queued drop dismisses any stamp on screen.
+- **Groove / evolution stamps** — a rubber-stamp card with the genre name.
+- **Victory lap** — the final headliner's crowd pops outward in a ripple, the camera cranes back
+  to reveal the whole show (crowd, LED wall spelling ENCORE!, pyro), fireworks keep going behind
+  a gold results screen.
 
 ## Damage model (multiplicative on purpose)
 
@@ -81,3 +96,6 @@ Each instrument levels to 5. Level 5 + its partner unlocks an **evolution** (hid
 - Seeds from the URL are validated against a strict pattern.
 - DOM is built with `textContent` only (lint-enforced no `innerHTML`).
 - Deterministic seeded RNG: share a seed with friends and play the same run (Daily Setlist).
+- The CSP is injected at build time (`default-src 'none'`, path-scoped `script-src`,
+  `require-trusted-types-for 'script'`), and `npm run verify:dist` fails the deploy if the
+  built page ever loses it, gains an inline script, or ships dev-only code.

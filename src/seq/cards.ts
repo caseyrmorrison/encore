@@ -246,10 +246,10 @@ export function buildPool(ctx: DraftContext, rng: Rng): { card: Card; w: number 
 }
 
 /** Draw `count` distinct offers. Evolutions, when available, are always offered. */
-export function drawOffers(ctx: DraftContext, rng: Rng, count = 3): Card[] {
+export function drawOffers(ctx: DraftContext, rng: Rng, count = 3, exclude: ReadonlySet<string> = new Set()): Card[] {
   const pool = buildPool(ctx, rng);
   const offers: Card[] = [];
-  const used = new Set<string>();
+  const used = new Set<string>(exclude);
   const evo = pool.find((e) => e.card.kind === 'evolve');
   if (evo) {
     offers.push(evo.card);
@@ -270,11 +270,11 @@ export function drawOffers(ctx: DraftContext, rng: Rng, count = 3): Card[] {
 }
 
 /** Offers for a Gold Record: rare-or-better only. */
-export function drawGoldOffers(ctx: DraftContext, rng: Rng, count = 3): Card[] {
+export function drawGoldOffers(ctx: DraftContext, rng: Rng, count = 3, exclude: ReadonlySet<string> = new Set()): Card[] {
   const boosted: DraftContext = { ...ctx, luck: Math.min(1, ctx.luck + 0.6) };
   const pool = buildPool(boosted, rng).filter((e) => cardRarity(e.card) !== 'common' || e.card.kind === 'level');
   const offers: Card[] = [];
-  const used = new Set<string>();
+  const used = new Set<string>(exclude);
   let guard = 0;
   while (offers.length < count && guard++ < 200) {
     const pick = rng.weighted(pool, (e) => (used.has(cardKey(e.card)) ? 0 : e.w));
@@ -284,6 +284,12 @@ export function drawGoldOffers(ctx: DraftContext, rng: Rng, count = 3): Card[] {
   }
   while (offers.length < count) offers.push({ kind: 'tips', amount: 60 });
   return offers;
+}
+
+/** Backstage stock: three regular cards and one rare-or-better, never the same card twice. */
+export function drawShopStock(ctx: DraftContext, rng: Rng): Card[] {
+  const base = drawOffers(ctx, rng, 3);
+  return [...base, ...drawGoldOffers(ctx, rng, 1, new Set(base.map(cardKey)))];
 }
 
 export function emptyPedals(): Record<PedalId, number> {

@@ -1478,7 +1478,7 @@ body.overlay-open .hud .streak {
   border-radius: 16px;
   background: var(--panel);
   border: 1px solid var(--line);
-  max-height: min(360px, 40vh);
+  max-height: min(340px, 36vh);
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -2620,4 +2620,155 @@ div.touch {
 /* a finger needs a real target: slightly roomier cards and steps */
 .touch .seq-cell {
   min-height: 30px;
+}
+
+/* headliner entrance: letterbox bars + a name card slammed over a band of the boss colour */
+.hud::before,
+.hud::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 11vh;
+  background: #000;
+  z-index: 3;
+  pointer-events: none;
+  transition: transform 0.45s var(--ease-out);
+}
+.hud::before {
+  top: 0;
+  transform: translateY(-100%);
+}
+.hud::after {
+  bottom: 0;
+  transform: translateY(100%);
+}
+.hud.cinematic::before,
+.hud.cinematic::after {
+  transform: none;
+}
+.bosscard {
+  --bc: #fff;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 58%;
+  display: grid;
+  justify-items: center;
+  z-index: 4;
+  pointer-events: none;
+  animation: bcin 0.5s var(--ease-back) backwards;
+}
+.bosscard.out {
+  animation: bcout 0.6s ease-in forwards;
+}
+.bc-band {
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  top: 8px;
+  bottom: -6px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bc) 34%, transparent) 20%, color-mix(in srgb, var(--bc) 34%, transparent) 80%, transparent);
+  transform: skewY(-3deg);
+  box-shadow: 0 0 60px color-mix(in srgb, var(--bc) 30%, transparent);
+  animation: bcband 0.5s var(--ease-out) backwards;
+}
+.bc-kicker {
+  position: relative;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.5em;
+  color: #fff;
+  opacity: 0.85;
+}
+.bc-name {
+  position: relative;
+  font-family: var(--display);
+  font-size: clamp(54px, 9vw, 120px);
+  line-height: 1;
+  color: #fff;
+  text-shadow:
+    0 0 26px var(--bc),
+    0 0 70px var(--bc),
+    0 6px 0 color-mix(in srgb, var(--bc) 50%, #000);
+}
+.bc-title {
+  position: relative;
+  margin-top: 6px;
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: 0.28em;
+  color: color-mix(in srgb, var(--bc) 60%, #fff);
+  text-transform: uppercase;
+}
+@keyframes bcin {
+  from {
+    transform: scale(2.4);
+    opacity: 0;
+    filter: blur(12px);
+  }
+}
+@keyframes bcband {
+  from {
+    transform: skewY(-3deg) scaleX(0);
+  }
+}
+@keyframes bcout {
+  to {
+    transform: translateX(-12%) scale(0.96);
+    opacity: 0;
+  }
+}
+
+/* milestone plaques: gold for record hits, green for the silenced count */
+.plaque {
+  --pc: #ffc53d;
+  position: absolute;
+  left: 22px;
+  top: 34%;
+  padding: 12px 22px 14px 18px;
+  border-radius: 4px 16px 16px 4px;
+  border-left: 5px solid var(--pc);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 22%, rgba(8, 5, 14, 0.9)), rgba(8, 5, 14, 0.55));
+  box-shadow: 0 0 40px color-mix(in srgb, var(--pc) 30%, transparent);
+  pointer-events: none;
+  animation: plaquein 0.45s var(--ease-back) backwards;
+}
+.plaque.out {
+  animation: plaqueout 0.5s ease-in forwards;
+}
+.pl-kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  color: var(--pc);
+}
+.pl-value {
+  font-family: var(--display);
+  font-size: 54px;
+  line-height: 1.05;
+  color: #fff;
+  text-shadow:
+    0 0 20px var(--pc),
+    0 4px 0 color-mix(in srgb, var(--pc) 45%, #000);
+}
+.pl-sub {
+  font-family: var(--body);
+  font-size: 13px;
+  color: #d8d0ec;
+}
+@keyframes plaquein {
+  from {
+    transform: translateX(-120%) skewX(-8deg);
+    opacity: 0;
+  }
+}
+@keyframes plaqueout {
+  to {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+}
+.hud.cinematic .plaque {
+  display: none;
 }

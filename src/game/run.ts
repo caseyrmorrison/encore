@@ -81,6 +81,8 @@ export class Run {
   kills = 0;
   damage = 0;
   bestHit = 0;
+  /** next single-hit size worth a celebration (×10 each time one lands) */
+  hitMilestone = 1000;
   time = 0;
   setTime = 0;
   perfects = 0;
