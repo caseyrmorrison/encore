@@ -578,7 +578,7 @@ export class MerchScreen {
         h('div', { class: 'merch-head' }, [h('div', { class: 'panel-title big', text: 'MERCH TABLE' }), this.fans]),
         h('div', { class: 'panel-sub', text: 'Fans follow you between runs. Spend them to add instruments to the draft pool.' }),
         this.body,
-        button('BACK', 'wide primary', a.close, 'ESC'),
+        button('BACK', 'wide', a.close, 'ESC'),
       ]),
     );
     root.append(this.el);
