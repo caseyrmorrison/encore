@@ -60,7 +60,28 @@ function noiseBurst(e: AudioEngine, t: number, dur: number, dest: Dest, pink = f
 
 /* ───────────────────────────── DRUMS ───────────────────────────── */
 
+/** Play a baked drum sample if we have one. Returns false to fall back to synthesis. */
+function sample(e: AudioEngine, name: string, t: number, vel: number, reverb = 0, rate = 1): boolean {
+  const buf = e.samples.get(name);
+  if (!buf) return false;
+  const src = e.ctx.createBufferSource();
+  src.buffer = buf;
+  // a hair of humanisation so repeated hits don't sound machine-gunned
+  src.playbackRate.value = rate * (1 + (Math.random() - 0.5) * 0.012);
+  const g = e.ctx.createGain();
+  g.gain.value = vel;
+  src.connect(g);
+  g.connect(e.bus.drums);
+  if (reverb > 0) send(e, g, reverb);
+  src.start(t);
+  return true;
+}
+
 export function kick(e: AudioEngine, t: number, vel = 1, big = false): void {
+  if (sample(e, big ? 'kick808' : 'kick', t, vel)) {
+    e.pump(t, big ? 0.75 : 0.55);
+    return;
+  }
   const out = gainEnv(e, e.bus.drums, t, 1.05 * vel, 0.002, big ? 0.9 : 0.42);
   const shaper = e.ctx.createWaveShaper();
   shaper.curve = e.softClip;
@@ -75,6 +96,7 @@ export function kick(e: AudioEngine, t: number, vel = 1, big = false): void {
 }
 
 export function snare(e: AudioEngine, t: number, vel = 1): void {
+  if (sample(e, 'snare', t, vel, 0.2)) return;
   const nG = gainEnv(e, e.bus.drums, t, 0.62 * vel, 0.001, 0.2);
   const hp = filter(e, 'highpass', 1100, 0.6, nG);
   noiseBurst(e, t, 0.25, filter(e, 'peaking', 3400, 1, hp));
@@ -86,6 +108,7 @@ export function snare(e: AudioEngine, t: number, vel = 1): void {
 
 const HAT_RATIOS = [2, 3, 4.16, 5.43, 6.79, 8.21];
 export function hat(e: AudioEngine, t: number, vel = 1, open = false): void {
+  if (sample(e, open ? 'hatOpen' : 'hat', t, vel)) return;
   const dec = open ? 0.32 : 0.045;
   const g = gainEnv(e, e.bus.drums, t, 0.37 * vel, 0.001, dec);
   const hp = filter(e, 'highpass', 7200, 0.8, g);
@@ -96,6 +119,7 @@ export function hat(e: AudioEngine, t: number, vel = 1, open = false): void {
 }
 
 export function clap(e: AudioEngine, t: number, vel = 1): void {
+  if (sample(e, 'clap', t, vel, 0.3)) return;
   const g = e.ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
   // three slapback transients then a tail — the classic 808 clap
@@ -113,6 +137,7 @@ export function clap(e: AudioEngine, t: number, vel = 1): void {
 }
 
 export function tom(e: AudioEngine, t: number, vel = 1, pitch = 0): void {
+  if (sample(e, 'tom', t, vel, 0.15, Math.pow(2, pitch / 12))) return;
   const f = 190 * Math.pow(2, pitch / 12);
   const g = gainEnv(e, e.bus.drums, t, 0.8 * vel, 0.002, 0.34);
   const o = osc(e, 'sine', f, t, 0.4, g);
@@ -123,6 +148,7 @@ export function tom(e: AudioEngine, t: number, vel = 1, pitch = 0): void {
 }
 
 export function cowbell(e: AudioEngine, t: number, vel = 1): void {
+  if (sample(e, 'cowbell', t, vel, 0.15)) return;
   const g = e.ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(0.5 * vel, t + 0.002);
@@ -136,6 +162,7 @@ export function cowbell(e: AudioEngine, t: number, vel = 1): void {
 }
 
 export function crash(e: AudioEngine, t: number, vel = 1): void {
+  if (sample(e, 'crash', t, vel, 0.45)) return;
   const g = gainEnv(e, e.bus.drums, t, 0.42 * vel, 0.002, 1.7);
   const hp = filter(e, 'highpass', 4200, 0.6, g);
   noiseBurst(e, t, 1.8, hp);
@@ -467,4 +494,29 @@ export function zap(e: AudioEngine, t: number, vel = 1): void {
   const g = gainEnv(e, e.bus.sfx, t, 0.12 * vel, 0.001, 0.09);
   const o = osc(e, 'sawtooth', 2400, t, 0.1, filter(e, 'highpass', 900, 1, g));
   o.frequency.exponentialRampToValueAtTime(300, t + 0.09);
+}
+
+/** Synthesise each drum once into a buffer (offline, dry) so hot paths just play samples. */
+export async function bakeDrumSamples(target: AudioEngine): Promise<void> {
+  if (typeof OfflineAudioContext === 'undefined') return;
+  const rate = target.ctx.sampleRate;
+  const make = async (name: string, seconds: number, fn: (e: AudioEngine) => void): Promise<void> => {
+    const ctx = new OfflineAudioContext(1, Math.ceil(rate * seconds), rate);
+    // imported lazily to avoid a cycle at module init
+    const { AudioEngine: Eng } = await import('./engine');
+    const e = new Eng(ctx, true);
+    fn(e);
+    target.samples.set(name, await ctx.startRendering());
+  };
+  await Promise.all([
+    make('kick', 0.6, (e) => kick(e, 0, 1)),
+    make('kick808', 1.1, (e) => kick(e, 0, 1, true)),
+    make('snare', 0.4, (e) => snare(e, 0, 1)),
+    make('hat', 0.12, (e) => hat(e, 0, 1)),
+    make('hatOpen', 0.45, (e) => hat(e, 0, 1, true)),
+    make('clap', 0.35, (e) => clap(e, 0, 1)),
+    make('tom', 0.5, (e) => tom(e, 0, 1, 0)),
+    make('cowbell', 0.4, (e) => cowbell(e, 0, 1)),
+    make('crash', 2.0, (e) => crash(e, 0, 1)),
+  ]);
 }

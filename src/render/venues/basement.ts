@@ -343,7 +343,7 @@ export class Basement implements Venue {
   private readonly ball: THREE.Mesh;
   private readonly neonMats: THREE.MeshBasicMaterial[] = [];
   private readonly parLenses: THREE.MeshStandardMaterial[] = [];
-  private readonly pillarMats: THREE.MeshStandardMaterial[] = [];
+  private readonly pillarMats: THREE.MeshPhysicalMaterial[] = [];
   private strobe = 0;
   private readonly tmpV = new THREE.Vector3();
   readonly stageCenter = new THREE.Vector3(0, 1.2, -HZ - 3.5);
@@ -441,8 +441,17 @@ export class Basement implements Venue {
     // obstacle pillars: round concrete columns with steel collars and neon rings
     const pillarTex = concreteTexture('#6b6668');
     pillarTex.repeat.set(2, 3);
+    void pillarTex;
     this.obstacles.forEach((o, i) => {
-      const pillarMat = new THREE.MeshStandardMaterial({ map: pillarTex, roughness: 0.9, color: 0x9a9396, transparent: true });
+      // glossy black lacquer: reflects the room's colour instead of reading as cork
+      const pillarMat = new THREE.MeshPhysicalMaterial({
+        color: 0x0c0a10,
+        roughness: 0.18,
+        metalness: 0.2,
+        clearcoat: 1,
+        clearcoatRoughness: 0.05,
+        transparent: true,
+      });
       this.pillarMats.push(pillarMat);
       const p = new THREE.Mesh(new THREE.CylinderGeometry(o.r, o.r * 1.06, 6.5, 28), pillarMat);
       p.position.set(o.x, 3.25, o.z);
@@ -454,6 +463,12 @@ export class Basement implements Venue {
         ring.rotation.x = Math.PI / 2;
         ring.position.set(o.x, y, o.z);
         this.group.add(ring);
+      }
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 5.2, 0.07), neonMat);
+        strip.position.set(o.x + Math.cos(a) * o.r * 1.01, 3.4, o.z + Math.sin(a) * o.r * 1.01);
+        this.group.add(strip);
       }
       const collar = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 1.12, o.r * 1.12, 0.35, 28), M.darkChrome());
       collar.position.set(o.x, 0.18, o.z);

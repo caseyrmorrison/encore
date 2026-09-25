@@ -26,11 +26,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm audit --omit=dev --audit-level=high
+      # dev deps build the shipped bundle too, so audit everything and verify registry signatures
+      - run: npm audit --audit-level=high
+      - run: npm audit signatures
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        env:
+          ENCORE_BASE: https://caseyrmorrison.github.io/encore/
+      - run: npm run verify:dist
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
         if: github.ref == 'refs/heads/main'
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

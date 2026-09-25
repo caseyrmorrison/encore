@@ -30,6 +30,8 @@ export interface FrameInfo {
   bossActive: boolean;
   /** 0..1 progress of a DROP build-up (the room darkens toward the downbeat) */
   build: number;
+  /** camera orientation, for billboards */
+  camQuat?: THREE.Quaternion;
 }
 
 export interface Venue {

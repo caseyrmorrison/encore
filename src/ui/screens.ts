@@ -234,11 +234,11 @@ export class HowToScreen {
       h('div', { class: 'panel' }, [
         h('div', { class: 'panel-title big', text: 'HOW TO PLAY' }),
         h('div', { class: 'how-grid' }, [
-          step('1', 'Move & aim', 'WASD to move. Your mouse aims (or turn on auto-aim). Your instruments fire on their own — on the beat.', icons.instrument('kick')),
-          step('2', 'Your weapons are a drum machine', 'Each instrument is a track on a 16-step grid. Every lit step fires that weapon when the playhead passes it. More notes = more attacks.', icons.instrument('snare')),
-          step('3', 'Compose to break the game', 'Tracks on the same step form CHORDS (+damage). Certain rhythms unlock GROOVES — genre bonuses. Accent, Ratchet and Echo multiply steps.', icons.fx('ratchet')),
-          step('4', 'Dash on the beat', 'SPACE dashes. Dash right on the beat for a PERFECT: shockwave, longer invulnerability, and hype.', icons.pedal('metronome')),
-          step('5', 'Drop it', 'Fill HYPE by silencing The Hush, then press Q. The game builds to the next downbeat and DROPS: everything doubles.', icons.fx('accent')),
+          step('1', 'Move & aim', 'WASD to move. Your mouse aims (or turn on auto-aim). You are the last live microphone.', icons.mic()),
+          step('2', 'Your weapons are a drum machine', 'Each instrument is a track on a 16-step grid. Every lit step fires that weapon when the playhead passes it. More notes = more attacks.', icons.machine()),
+          step('3', 'Compose to break the game', 'Tracks on the same step form CHORDS (+damage). Real rhythms unlock secret GROOVES. Accent, Ratchet and Echo multiply steps.', icons.fx('ratchet')),
+          step('4', 'Dash on the beat', 'SPACE dashes. Dash as the ring lands on the beat for a PERFECT: shockwave, longer invulnerability, and hype.', icons.pedal('metronome')),
+          step('5', 'Drop it', 'Fill HYPE by silencing The Hush, then press Q. The room builds to the next downbeat — then everything doubles.', icons.pedal('hypeman')),
           step('6', 'Headline three venues', 'Survive the set, beat the headliner, spend tips backstage. Win, and the crowd demands an ENCORE — endless and faster.', icons.goldRecord()),
         ]),
         h('div', { class: 'how-keys' }, [
@@ -297,9 +297,10 @@ export class ResultsScreen {
   private readonly shareBtn: HTMLButtonElement;
   private readonly hero: HTMLElement;
   private again!: HTMLButtonElement;
+  private posterBtn!: HTMLButtonElement;
   private shareText = '';
 
-  constructor(root: HTMLElement, a: { again(): void; menu(): void; merch(): void }) {
+  constructor(root: HTMLElement, a: { again(): void; menu(): void; merch(): void; poster(): Promise<void> }) {
     this.el = overlay('results', 'Results');
     this.title = h('div', { class: 'results-title' });
     this.sub = h('div', { class: 'results-sub' });
@@ -320,6 +321,10 @@ export class ResultsScreen {
         h('div', { class: 'row' }, [
           (this.again = button('PLAY AGAIN', 'primary big', a.again, 'ENTER')),
           button('MERCH TABLE', '', a.merch),
+          (this.posterBtn = button('SAVE POSTER', '', () => {
+            this.posterBtn.firstChild!.textContent = 'PRINTING…';
+            void a.poster().finally(() => (this.posterBtn.firstChild!.textContent = 'SAVE POSTER'));
+          })),
           this.shareBtn,
           button('MENU', 'ghost', a.menu),
         ]),

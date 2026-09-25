@@ -19,6 +19,8 @@ export interface Buses {
 export class AudioEngine {
   readonly ctx: AudioContext;
   readonly offline: boolean;
+  /** Pre-rendered drum hits (synthesised once at boot); voices fall back to live synthesis. */
+  readonly samples = new Map<string, AudioBuffer>();
   readonly bus: Buses;
   readonly reverbSend: GainNode;
   readonly delaySend: GainNode;
@@ -40,8 +42,11 @@ export class AudioEngine {
   private hitBudget = 0;
   private hitBudgetTime = 0;
 
-  /** Pass an OfflineAudioContext to render/measure sounds without a speaker. */
-  constructor(offlineCtx?: OfflineAudioContext) {
+  /**
+   * Pass an OfflineAudioContext to render/measure sounds without a speaker. `dry` skips all
+   * master processing (used to bake samples).
+   */
+  constructor(offlineCtx?: OfflineAudioContext, dry = false) {
     if (offlineCtx) {
       this.ctx = offlineCtx as unknown as AudioContext;
       this.offline = true;
@@ -133,6 +138,16 @@ export class AudioEngine {
 
     this.noise = this.makeNoise(2, false);
     this.pinkNoise = this.makeNoise(3, true);
+    if (dry) {
+      for (const b of Object.values(this.bus)) {
+        b.disconnect();
+        b.connect(ctx.destination);
+      }
+      this.bus.drums.gain.value = 1;
+      this.reverbSend.disconnect();
+      this.delaySend.disconnect();
+      this.duck.gain.value = 1;
+    }
     this.softClip = makeCurve((x) => Math.tanh(x * 2.2));
     this.hardClip = makeCurve((x) => Math.max(-0.7, Math.min(0.7, x * 3)) / 0.7);
   }

@@ -80,6 +80,93 @@ const start = async () => {
 };
 
 const S = {
+  async botmid() {
+    const mins = Number(opt('mins', '5'));
+    const venue = Number(opt('venue', '1'));
+    await start();
+    await E((venue) => {
+      const d = window.__encore;
+      const g = d.game;
+      for (const i of ['hat', 'bass', 'lead', 'clap']) d.give(i);
+      const lv = { kick: 4, snare: 3, hat: 3, bass: 2, lead: 3, clap: 2 };
+      for (const t of g.run.pattern.tracks) t.level = lv[t.inst] ?? 1;
+      g.run.pattern.addSpare('kick', 2);
+      g.run.pattern.addSpare('hat', 3);
+      g.run.pattern.tracks.forEach((_, i) => g.run.pattern.autoPlace(i));
+      g.run.pedals.overdrive = 2;
+      g.run.pedals.roadie = 1;
+      g.run.pedals.fuzz = 1;
+      g.run.level = venue === 1 ? 15 : 26;
+      if (venue === 2) {
+        for (const t of g.run.pattern.tracks) t.level = Math.min(5, t.level + 1);
+        g.run.pedals.overdrive = 4;
+        g.run.pattern.fx[0].accent = true;
+        g.run.pattern.fx[8].ratchet = 2;
+      }
+      g.run.refresh(true);
+      g.run.hp = g.run.stats.maxHp;
+      d.venue(venue);
+      d.bot(true);
+    }, venue);
+    const t0 = Date.now();
+    let n = 0;
+    while (Date.now() - t0 < mins * 60000) {
+      await sleep(20000);
+      n++;
+      const info = await E(() => ({ st: window.__encore.state(), run: window.__encore.runInfo() }));
+      console.log(`[${n * 20}s]`, JSON.stringify(info));
+      if (info.st === 'results' || info.st === 'title') break;
+    }
+  },
+  async finale() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      d.god();
+      d.give('hat');
+      d.give('lead');
+      d.venue(2);
+      d.skip(999);
+    });
+    await sleep(2500);
+    await E(() => {
+      const g = window.__encore.game;
+      if (g.boss?.entry) g.boss.entry.hp = 1;
+    });
+    await sleep(2200);
+    await shot('finale');
+    await sleep(3000);
+    await shot('finale-2');
+    await sleep(6000);
+    await shot('win-results');
+    console.log('state', await E(() => window.__encore.state()));
+  },
+  async og() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      const g = d.game;
+      d.god();
+      for (const i of ['hat', 'bass', 'lead', 'clap', 'scratch']) d.give(i);
+      d.skip(100);
+      d.spawn('mote', 90);
+      d.spawn('mute', 12);
+      d.spawn('bouncer', 1);
+      d.hype();
+      g.player.x = -4;
+      g.player.z = 2;
+    });
+    await dance(2500);
+    await page.keyboard.press('KeyQ');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 8000 && (await E(() => window.__encore.game.dropState)) !== 'active') await sleep(40);
+    await sleep(700);
+    await E(() => document.getElementById('ui').style.setProperty('visibility', 'hidden'));
+    await shot('og');
+  },
+  async density() {
+    console.log('density', JSON.stringify(await E(() => window.__encore.density())));
+  },
   async mix() {
     const rep = await E(() => window.__encore.mix());
     for (const [k, v] of Object.entries(rep)) console.log(k.padEnd(10), 'peak', String(v.peak).padStart(6), 'rms', String(v.rms).padStart(6));
@@ -344,6 +431,26 @@ const S = {
     await E(() => window.__encore.results(false));
     await sleep(1200);
     await shot('results');
+  },
+  async poster() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      for (const i of ['hat', 'bass', 'lead', 'clap', 'scratch']) d.give(i);
+      d.game.run.kills = 4821;
+      d.game.run.bestHit = 18342;
+      d.game.run.level = 31;
+      d.game.run.time = 842;
+      d.game.run.venueIndex = 2;
+    });
+    await sleep(500);
+    await E(() => window.__encore.results(true));
+    await sleep(800);
+    const dl = page.waitForEvent('download', { timeout: 15000 });
+    await page.getByText('SAVE POSTER').click();
+    const file = await dl;
+    await file.saveAs(`${out}/poster.png`);
+    console.log('saved poster', `${out}/poster.png`);
   },
   async merch() {
     await page.mouse.click(w / 2, hgt / 2);

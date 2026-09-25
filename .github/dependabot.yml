@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # let fresh releases age a week before we take them (supply-chain cooldown)
+    cooldown:
+      default-days: 7
     groups:
       dev:
         dependency-type: development

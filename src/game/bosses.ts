@@ -258,7 +258,7 @@ export class Feedback extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 9000, 4.4);
+    this.register(ctx, x, z, 7000, 4.4);
     this.group.position.set(x, 0, z);
   }
 
@@ -459,7 +459,7 @@ export class Cantor extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 26000, 2.8);
+    this.register(ctx, x, z, 20000, 2.8);
     this.tx = x;
     this.tz = z;
     this.group.position.set(x, 0.6, z);

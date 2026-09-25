@@ -14,8 +14,31 @@ function webglAvailable(): boolean {
   }
 }
 
+/** Refuse to run inside someone else's frame (GitHub Pages can't send frame-ancestors). */
+function framed(): boolean {
+  try {
+    return window.top !== window.self;
+  } catch {
+    return true;
+  }
+}
+
 async function boot(): Promise<void> {
   const bootEl = document.getElementById('boot');
+  if (framed()) {
+    const sub = bootEl?.querySelector('.boot-sub');
+    if (sub) {
+      const a = document.createElement('a');
+      a.href = window.location.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = 'ENCORE runs in its own tab — open it here';
+      a.style.color = '#ff2d78';
+      sub.replaceChildren(a);
+    }
+    bootEl?.querySelector('.boot-bar')?.remove();
+    return;
+  }
   const canvas = document.getElementById('stage') as HTMLCanvasElement | null;
   const ui = document.getElementById('ui');
   if (!canvas || !ui) return;

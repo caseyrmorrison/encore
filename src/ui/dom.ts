@@ -31,11 +31,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   if (attrs.role) el.setAttribute('role', attrs.role);
   if (attrs.tabIndex !== undefined) el.tabIndex = attrs.tabIndex;
   if (attrs.style) Object.assign(el.style, attrs.style);
-  if (attrs.src && el instanceof HTMLImageElement) {
-    // only our own generated data: URLs and same-origin assets are ever used
-    if (attrs.src.startsWith('data:image/png;base64,') || attrs.src.startsWith('./') || attrs.src.startsWith('/'))
-      el.src = attrs.src;
-  }
+  if (attrs.src && el instanceof HTMLImageElement && isSafeImageSrc(attrs.src)) el.src = attrs.src;
   if (attrs.alt !== undefined && el instanceof HTMLImageElement) el.alt = attrs.alt;
   if (attrs.type && el instanceof HTMLButtonElement) el.type = attrs.type as 'button';
   if (attrs.aria) for (const [k, v] of Object.entries(attrs.aria)) el.setAttribute(`aria-${k}`, v);
@@ -54,4 +50,9 @@ export function clear(el: Element): void {
 
 export function show(el: HTMLElement, on: boolean): void {
   el.classList.toggle('hidden', !on);
+}
+
+/** Only our own rendered PNG data URLs and same-origin relative paths (never protocol-relative). */
+export function isSafeImageSrc(src: string): boolean {
+  return /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(src) || /^\.?\/(?!\/)[\w./-]+$/.test(src);
 }

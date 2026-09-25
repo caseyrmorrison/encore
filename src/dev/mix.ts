@@ -64,3 +64,33 @@ export async function mixReport(): Promise<Record<string, { peak: number; rms: n
   }
   return out;
 }
+
+/** Worst-case density: every track on every step, ratchet ×4 — how fast can we render it? */
+export async function densityReport(): Promise<{ audioSeconds: number; renderMs: number; realtimeFactor: number; voices: number }> {
+  const rate = 44100;
+  const seconds = 2;
+  const ctx = new OfflineAudioContext(2, rate * seconds, rate);
+  const e = new AudioEngine(ctx);
+  await V.bakeDrumSamples(e);
+  const chord = PROGRESSIONS.mainstage.chords[0]!;
+  const step = 60 / 140 / 4;
+  let voices = 0;
+  for (let s = 0; s < 16; s++) {
+    for (let k = 0; k < 4; k++) {
+      const t = 0.05 + s * step + (k * step) / 4;
+      V.kick(e, t, 0.8);
+      V.snare(e, t, 0.8);
+      V.hat(e, t, 0.8);
+      V.clap(e, t, 0.8);
+      V.tom(e, t, 0.8);
+      V.cowbell(e, t, 0.8);
+      V.bass(e, t, chordTone(chord, 0, -2), step / 4, 0.8, 0);
+      V.lead(e, t, chordTone(chord, s % 4, 1), 0.8);
+      voices += 8;
+    }
+  }
+  const t0 = performance.now();
+  await ctx.startRendering();
+  const renderMs = performance.now() - t0;
+  return { audioSeconds: seconds, renderMs: Math.round(renderMs), realtimeFactor: +((seconds * 1000) / renderMs).toFixed(2), voices };
+}

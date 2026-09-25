@@ -40,7 +40,7 @@ export function computeStats(pedals: Record<PedalId, number>, grooves: GrooveSta
     projSpeed: 1 + pedals.wah * 0.25,
     range: 1 + pedals.wah * 0.15,
     area: 1 + pedals.ampstack * 0.2,
-    pickupRadius: 3.2 * (1 + pedals.groupies * 0.45),
+    pickupRadius: 4.2 * (1 + pedals.groupies * 0.45),
     moveSpeed: 9.5 * (1 + pedals.energy * 0.1) * (g.has('breakbeat') ? 1.12 : 1),
     dashDist: 1 + pedals.stagedive * 0.3,
     perfectWindow: 0.085 + pedals.metronome * 0.045,
@@ -119,7 +119,7 @@ export class Run {
   get xpToNext(): number {
     const l = this.level;
     // L1→2 in ~10s, a draft every ~12-15s through the Basement, ~L35 by the final headliner
-    return Math.round(5 + l * 5 + l * l * 0.6);
+    return Math.round(4 + l * 4 + l * l * 0.55);
   }
 
   /** Recompute grooves & stats if the pattern or pedals changed. Returns newly discovered grooves. */

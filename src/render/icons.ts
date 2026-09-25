@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { INSTRUMENT_IDS, type InstrumentId } from '../seq/instruments';
 import { PEDALS, PEDAL_IDS, type PedalId } from '../seq/cards';
+import { PlayerModel } from './playerModel';
 import {
   buildBolt,
   buildGear,
@@ -80,6 +81,55 @@ export class IconFactory {
     return this.get('picks', () => buildPicks());
   }
 
+  /** The hero, rendered from the in-game model. */
+  mic(): string {
+    return this.get('mic', () => {
+      const pm = new PlayerModel();
+      pm.update(0, 0, 0, 0, 0.6, 0.2, 0.5, new Float32Array(16), false, false);
+      const g = new THREE.Group();
+      g.add(pm.body);
+      pm.body.position.set(0, 0, 0);
+      pm.body.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const m = o.material as THREE.Material & { side?: THREE.Side; color?: THREE.Color; emissiveIntensity?: number };
+        // outline shells vanish on a dark card; the handle needs a little sheen
+        if (m.side === THREE.BackSide) o.visible = false;
+        if (m instanceof THREE.MeshStandardMaterial && m.color.getHex() === 0x17161b) {
+          o.material = new THREE.MeshStandardMaterial({ color: 0x6a6878, roughness: 0.3, metalness: 0.7 });
+        }
+        if (m instanceof THREE.MeshStandardMaterial && m.emissiveIntensity !== undefined && m.emissiveIntensity > 0.5) m.emissiveIntensity = 2.2;
+      });
+      // stand it upright, then lay it on the diagonal like a classic mic icon
+      pm.body.rotation.set(-0.83, 0, 0);
+      g.rotation.set(0.25, 0.3, -0.75);
+      return g;
+    });
+  }
+
+  machine(): string {
+    return this.get('machine', () => {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.3, 1.6), new THREE.MeshStandardMaterial({ color: 0x2a282e, roughness: 0.5 }));
+      g.add(body);
+      const cols = [0xff5a3a, 0xff9a2e, 0xffd84d, 0xefe6d2];
+      const lit = [0, 4, 6, 8, 12, 14];
+      for (let r = 0; r < 3; r++)
+        for (let s = 0; s < 16; s++) {
+          const on = lit.includes((s + r * 2) % 16);
+          const key = new THREE.Mesh(
+            new THREE.BoxGeometry(0.16, 0.08, 0.3),
+            on
+              ? new THREE.MeshStandardMaterial({ color: 0, emissive: [0xff3b5c, 0xff9a2e, 0x2ee6ff][r]!, emissiveIntensity: 2.2 })
+              : new THREE.MeshStandardMaterial({ color: cols[Math.floor(s / 4)]!, roughness: 0.5 }),
+          );
+          key.position.set(-1.5 + s * 0.2, 0.19, -0.45 + r * 0.42);
+          g.add(key);
+        }
+      g.rotation.set(0.75, -0.25, 0);
+      return g;
+    });
+  }
+
   goldRecord(): string {
     return this.get('gold', () => {
       const r = buildRecord(0xffe9a8, true);
@@ -98,6 +148,8 @@ export class IconFactory {
     this.heart();
     this.picks();
     this.goldRecord();
+    this.mic();
+    this.machine();
   }
 
   private get(key: string, build: () => THREE.Object3D): string {

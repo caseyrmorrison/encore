@@ -195,6 +195,9 @@ export class Cathedral implements Venue {
   private readonly m4 = new THREE.Matrix4();
   private readonly candlePos: THREE.Vector3[] = [];
   private readonly flameMats: THREE.ShaderMaterial[] = [];
+  private readonly flameSprites: THREE.Mesh[] = [];
+  private readonly embers: THREE.InstancedMesh;
+  private readonly emberState: { x: number; y: number; z: number; vy: number; ox: number; oz: number; life: number }[] = [];
 
   constructor() {
     this.winCols = [0x4d6bff, 0xff3d6e, 0xffc53d, 0x3dffc5, 0xb04dff, 0xff8a3d].map((c) => new THREE.Color(c));
@@ -325,16 +328,27 @@ export class Cathedral implements Venue {
       this.group.add(bowl);
       const flameMat = makeFlameMaterial(0xff5a1a);
       this.flameMats.push(flameMat);
+      // billboarded flame sheets: read as fire from the high camera, not as glowing discs
       for (let k = 0; k < 2; k++) {
-        const f = new THREE.Mesh(new THREE.ConeGeometry(1.1 - k * 0.35, 3.2 - k * 0.8, 20, 1, true), flameMat);
-        f.position.set(o.x, 3.2 + 1.6 - k * 0.4 - 0.2, o.z);
-        f.rotation.y = k * 1.3;
+        const geo = new THREE.PlaneGeometry(2.4 - k * 0.7, 4.2 - k * 1.2);
+        geo.translate(0, (4.2 - k * 1.2) / 2, 0);
+        const f = new THREE.Mesh(geo, flameMat);
+        f.position.set(o.x, 2.9, o.z);
+        this.flameSprites.push(f);
         this.group.add(f);
       }
       const fl = new THREE.PointLight(0xff9a40, 24, 12, 1.6);
       fl.position.set(o.x, 4, o.z);
       this.group.add(fl);
     }
+
+    this.embers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 6, 4), M.glow(0xffa040, 5), 80);
+    this.embers.frustumCulled = false;
+    for (let i = 0; i < 80; i++) {
+      const o = this.obstacles[i % this.obstacles.length]!;
+      this.emberState.push({ x: o.x, y: 3 + Math.random() * 6, z: o.z, vy: 1 + Math.random() * 2, ox: o.x, oz: o.z, life: Math.random() });
+    }
+    this.group.add(this.embers);
 
     const hemi = new THREE.HemisphereLight(0xaab8ff, 0x201018, 1.0);
     this.group.add(hemi);
@@ -392,6 +406,22 @@ export class Cathedral implements Venue {
       m.uniforms.uTime!.value = f.time;
       m.uniforms.uPower!.value = 0.85 + beat * 0.35 + (f.drop ? 0.4 : 0);
     }
+    if (f.camQuat) for (const sp of this.flameSprites) sp.quaternion.copy(f.camQuat);
+    this.emberState.forEach((e, i) => {
+      e.life -= f.dt * 0.35;
+      e.y += e.vy * f.dt * (1 + beat);
+      e.x += Math.sin(f.time * 2 + i) * f.dt * 0.4;
+      if (e.life <= 0 || e.y > 12) {
+        e.life = 1;
+        e.y = 3.2;
+        e.x = e.ox + (Math.random() - 0.5) * 1.2;
+        e.z = e.oz + (Math.random() - 0.5) * 1.2;
+      }
+      this.m4.makeScale(e.life, e.life, e.life);
+      this.m4.setPosition(e.x, e.y, e.z);
+      this.embers.setMatrixAt(i, this.m4);
+    });
+    this.embers.instanceMatrix.needsUpdate = true;
   }
 
   spawnPoint(rng: Rng, px: number, pz: number, out: { x: number; z: number }): void {

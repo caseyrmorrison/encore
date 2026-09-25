@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Rng } from '../../core/rng';
 import { M } from '../materials';
-import { buildSpeakerStack } from '../instrumentModels';
+import { buildInstrument, buildSpeakerStack } from '../instrumentModels';
 import {
   beamGeometry,
   GLSL_COMMON,
@@ -60,10 +60,12 @@ void main() {
   // moving-head light pools
   for (int i = 0; i < 8; i++) {
     float d = length(w - uSpots[i].xy);
-    // real follow-spot pools: hard rim, soft interior
-    float pool = smoothstep(uSpots[i].z, uSpots[i].z * 0.9, d);
-    float rimEdge = smoothstep(uSpots[i].z * 0.8, uSpots[i].z * 0.97, d) * pool;
-    col += uSpotCols[i] * (pool * 0.55 + rimEdge * 0.9) * uSpots[i].w;
+    // gobo'd stage light: soft edge with a rotating star pattern (reads as lighting, not a hazard)
+    vec2 dv = w - uSpots[i].xy;
+    float pool = smoothstep(uSpots[i].z, uSpots[i].z * 0.55, d);
+    float ga = atan(dv.y, dv.x + 1e-4) + uTime * (0.6 + float(i) * 0.13);
+    float gobo = 0.55 + 0.45 * smoothstep(0.2, 0.7, sin(ga * 5.0) * 0.5 + 0.5 - d / uSpots[i].z * 0.4);
+    col += uSpotCols[i] * pool * gobo * uSpots[i].w * 0.9;
   }
   // drop: the whole deck strobes in stripes
   col += lc * uDrop * step(0.5, fract(w.x * 0.08 + uTime * 3.0)) * 0.25;
@@ -343,6 +345,41 @@ export class Mainstage implements Venue {
     this.crowd.frustumCulled = false;
     this.phones.frustumCulled = false;
     this.group.add(this.crowd, this.phones);
+
+    // upstage drum riser with the house kit, monitor wedges along the lip
+    const riser = new THREE.Mesh(new THREE.BoxGeometry(12, 1.4, 5), new THREE.MeshStandardMaterial({ color: 0x131118, roughness: 0.4, metalness: 0.3 }));
+    riser.position.set(0, 0.7, -HZ - 3);
+    this.group.add(riser);
+    const riserLip = new THREE.Mesh(new THREE.BoxGeometry(12, 0.08, 0.08), M.glow(0x2ee6ff, 3));
+    riserLip.position.set(0, 1.42, -HZ - 0.5);
+    this.group.add(riserLip);
+    const kit: [Parameters<typeof buildInstrument>[0], number, number, number, number][] = [
+      ['kick', 0, 2.4, -HZ - 3.6, 1.3],
+      ['snare', -2.2, 2.5, -HZ - 2.6, 0.9],
+      ['hat', -3.8, 3.3, -HZ - 3.2, 0.9],
+      ['crash', 3.2, 4.4, -HZ - 3.8, 1.1],
+      ['tom', 2.1, 3.2, -HZ - 2.8, 0.8],
+      ['gong', 5.2, 3.4, -HZ - 4.2, 1.1],
+    ];
+    for (const [id, x, y, z, sc] of kit) {
+      const m = buildInstrument(id);
+      m.position.set(x, y, z);
+      m.scale.multiplyScalar(sc);
+      this.group.add(m);
+    }
+    const wedgeGeo = new THREE.BoxGeometry(2.2, 0.9, 1.3);
+    wedgeGeo.translate(0, 0.45, 0);
+    for (let i = 0; i < 5; i++) {
+      const wx = -HX + 8 + i * ((HX * 2 - 16) / 4);
+      const wedge = new THREE.Mesh(wedgeGeo, M.blackPlastic());
+      wedge.position.set(wx, 0, HZ + 1.1);
+      wedge.rotation.x = -0.45;
+      this.group.add(wedge);
+      const grille = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.7), M.rubber());
+      grille.position.set(wx, 0.62, HZ + 0.52);
+      grille.rotation.x = -0.45 - Math.PI * 0;
+      this.group.add(grille);
+    }
 
     // obstacles: touring PA stacks on the deck
     for (const o of this.obstacles) {

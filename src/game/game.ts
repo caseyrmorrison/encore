@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AudioEngine } from '../audio/engine';
 import { Transport, type StepEvent } from '../audio/transport';
 import * as V from '../audio/voices';
-import { clamp, damp, formatInt, lerp } from '../core/math';
+import { clamp, damp, formatInt } from '../core/math';
 import { Input } from '../core/input';
 import { prof } from '../core/prof';
 import { dailyKey, dailySeed, parseSeedCode, seedToCode } from '../core/rng';
@@ -26,6 +26,7 @@ import { SETLISTS, SETLIST_IDS, type SetlistId } from '../seq/setlists';
 import { BackstageScreen, type ShopItem } from '../ui/backstage';
 import { describeCard } from '../ui/cardInfo';
 import { h } from '../ui/dom';
+import { downloadBlob, renderPoster } from '../ui/poster';
 import { DraftScreen } from '../ui/draft';
 import { Hud } from '../ui/hud';
 import {
@@ -174,6 +175,8 @@ export class Game {
     this.stage = new Stage(canvas, QUALITY[this.save.settings.quality]);
     this.rig = new CameraRig(this.stage.camera);
     this.audio = new AudioEngine();
+    // bake drum hits in the background; until ready, voices synthesise live
+    void V.bakeDrumSamples(this.audio).catch(() => undefined);
     this.transport = new Transport(96);
     this.music = new Music(this.audio, this.transport);
     this.input = new Input(canvas);
@@ -234,6 +237,7 @@ export class Game {
       again: () => this.onResultsPrimary(),
       menu: () => this.toTitle(),
       merch: () => this.openMerch(),
+      poster: () => this.savePoster(),
     });
     this.merch = new MerchScreen(uiRoot, this.icons, {
       buy: (id) => this.buyUnlock(id),
@@ -357,6 +361,7 @@ export class Game {
     this.music.hushed = false;
     this.transport.setBpm(92);
     this.audio.setTempo(92);
+    this.stage.hueSat.hue = 0;
     this.muffleTarget = 0;
     this.band.sync([]);
     this.player.x = 0;
@@ -414,6 +419,11 @@ export class Game {
     this.playerModel.resetCable(0, 4);
     this.rig.target.set(0, 0, 4);
     this.rig.snap();
+    // opening swoop: start high and wide, settle onto the frontman
+    this.rig.distance = 78;
+    this.rig.update(0.016);
+    // encore loops play "after hours": the whole room shifts hue each time round
+    this.stage.hueSat.hue = run.loop > 0 ? ((run.loop * 1.1) % (Math.PI * 2)) - Math.PI : 0;
     run.refresh(true);
     this.music.pattern = run.pattern;
     this.music.backing = this.venue.progression;
@@ -428,7 +438,7 @@ export class Game {
     this.hud.boss(null);
     this.state = 'playing';
     this.muffleTarget = 0;
-    const loopTag = run.loop > 0 ? ` — ENCORE ${run.loop}` : '';
+    const loopTag = run.loop > 0 ? ` · AFTER HOURS ${run.loop}` : '';
     this.hud.announce(this.venue.name + loopTag, this.venue.tagline, '#' + this.venue.palette.accents[0]!.toString(16).padStart(6, '0'), 3.4);
     V.crowdCheer(this.audio, this.audio.now + 0.1, 0.4 + index * 0.3, 3);
   }
@@ -495,6 +505,7 @@ export class Game {
     );
     this.save.fans += fans;
     this.save.totalFans += fans;
+    this.lastFans = fans;
     if (won) this.save.wins = Math.max(this.save.wins, run.loudness + 1);
     const newBestKills = run.kills > this.save.bestKills && this.save.runs > 1;
     const newBestHit = run.bestHit > this.save.bestHit && this.save.runs > 1;
@@ -538,6 +549,32 @@ export class Game {
   }
 
   private resultsWon = false;
+
+  private async savePoster(): Promise<void> {
+    const run = this.run;
+    if (!run) return;
+    const blob = await renderPoster({
+      won: this.resultsWon,
+      venueName: VENUE_NAMES[run.venueIndex] ?? 'THE VENUE',
+      kills: run.kills,
+      bestHit: run.bestHit,
+      level: run.level,
+      time: run.time,
+      fans: this.lastFans,
+      seedCode: seedToCode(run.seed),
+      daily: run.mode === 'daily',
+      grooves: [...run.discovered].map((g) => ({ genre: GROOVES[g].genre, color: GROOVES[g].color })),
+      tracks: run.pattern.tracks.map((t) => ({
+        short: INSTRUMENTS[t.inst].short,
+        css: INSTRUMENTS[t.inst].css,
+        notes: [...t.notes],
+        icon: this.icons.instrument(t.inst),
+      })),
+    });
+    if (blob) downloadBlob(blob, `encore-${seedToCode(run.seed).toLowerCase()}.png`);
+  }
+
+  private lastFans = 0;
 
   private onResultsPrimary(): void {
     const run = this.run;
@@ -779,8 +816,8 @@ export class Game {
     this.transport.drain(audible, (ev) => this.onStepEvent(ev));
     prof.end('notes');
 
-    // boss
-    if (this.boss) {
+    // boss (a defeated boss is inert: its enemy slot may already be recycled)
+    if (this.boss && !this.boss.dead) {
       this.bossCtx.px = p.x;
       this.bossCtx.pz = p.z;
       this.bossCtx.playerInvuln = p.invuln > 0 || p.dashT > 0;
@@ -840,7 +877,7 @@ export class Game {
       p.z,
       p.radius * 0.8,
       this.venue.bounds,
-      { hit: (pr, e) => this.projectileHit(pr, e), hitPlayer: (pr) => this.hurt(10 * (1 + run.venueIndex * 0.4), pr.x, pr.z) },
+      { hit: (pr, e) => this.projectileHit(pr, e), hitPlayer: (pr) => this.hurt(8 * (1 + run.venueIndex * 0.35), pr.x, pr.z) },
       this.glow,
       this.dark,
       false,
@@ -944,9 +981,12 @@ export class Game {
       const dx = p.x - pr.x;
       const dz = p.z - pr.z;
       const d2 = dx * dx + dz * dz;
-      if (d2 > 25) continue;
-      fx += (dx / Math.max(1, d2)) * 2;
-      fz += (dz / Math.max(1, d2)) * 2;
+      if (d2 > 36) continue;
+      // sidestep: push perpendicular to the bullet's travel, away from its line
+      const l = Math.hypot(pr.vx, pr.vz) || 1;
+      const side = Math.sign(dx * -pr.vz / l + dz * pr.vx / l) || 1;
+      fx += ((-pr.vz / l) * side * 6) / Math.max(1, d2);
+      fz += ((pr.vx / l) * side * 6) / Math.max(1, d2);
     }
     // drift toward the centre and toward pickups so the bot doesn't hug walls
     fx += -p.x * 0.004;
@@ -1130,7 +1170,7 @@ export class Game {
       const orders = this.director.onBeat(run.setTime, this.transport.stepDur * 4, this.enemies.aliveCount, !!this.boss);
       for (const o of orders) this.release(o.kind, o.count, o.elite, o.ring);
     }
-    if (this.boss && this.boss.entry?.alive) this.boss.onStep(this.bossCtx, ev.step, ev.bar);
+    if (this.boss && !this.boss.dead && this.boss.entry?.alive) this.boss.onStep(this.bossCtx, ev.step, ev.bar);
     // THE ONE: downbeat nova
     if (ev.step === 0 && run.grooves.active.has('downbeat')) {
       const r = 6 * run.stats.area;
@@ -1629,6 +1669,10 @@ export class Game {
     const boss = this.boss!;
     const run = this.run!;
     boss.dead = true;
+    const bx = boss.x;
+    const bz = boss.z;
+    // release the slot: new minions may reuse it, and the boss script must never touch them
+    boss.entry = null;
     this.bossDownT = 4;
     this.hud.boss(null);
     const color = new THREE.Color(boss.color);
@@ -1646,15 +1690,15 @@ export class Game {
     this.music.fanfare(true);
     for (let k = 0; k < 5; k++) {
       this.schedule(k * 0.25, () => {
-        const x = boss.x + (Math.random() - 0.5) * 8;
-        const z = boss.z + (Math.random() - 0.5) * 8;
+        const x = bx + (Math.random() - 0.5) * 8;
+        const z = bz + (Math.random() - 0.5) * 8;
         this.glow.burst(x, 2, z, 90, this.venue.palette.accents[k % 4]!, 26, { vy: 22, life: 1.3, size: 0.55, shape: Shape.Square, gravity: 14, spin: 12 });
         this.ground.add(GroundKind.Shock, x, z, 1, 14, 0.7, this.venue.palette.accents[k % 4]!, { thickness: 0.06 });
         V.kick(this.audio, this.audio.now, 1, true);
       });
     }
     this.world.remove(boss.group);
-    for (let i = 0; i < 12; i++) this.pickups.spawn('tip', boss.x, boss.z, 5, 3);
+    for (let i = 0; i < 12; i++) this.pickups.spawn('tip', bx, bz, 5, 3);
     run.tips += 40;
     if (run.venueIndex >= 2) {
       this.finale();
@@ -2234,6 +2278,7 @@ export class Game {
       playerZ: p.z,
       bossActive: !!this.boss,
       build: this.buildT,
+      camQuat: this.stage.camera.quaternion,
     });
     this.setVenueBar();
 
@@ -2261,7 +2306,7 @@ export class Game {
       this.rig.setLookAhead(p.aimX * 2.2, p.aimZ * 1.6);
     }
     const baseDist = 31 + (run ? Math.min(6, run.pattern.tracks.length * 0.4) : 0) + (boss ? 5 : 0) - this.buildT * 7;
-    this.rig.distance = lerp(this.rig.distance, baseDist, 0.02);
+    this.rig.distance = damp(this.rig.distance, baseDist, this.rig.distance > baseDist + 8 ? 1.6 : 1.2, rawDt);
     this.rig.pitch = 0.98;
     this.rig.yaw = 0;
     const kick = Math.pow(1 - beatPhase, 6);
@@ -2374,6 +2419,7 @@ export class Game {
         },
       prof: () => prof.report(),
       mix: () => import('../dev/mix').then((m) => m.mixReport()),
+      density: () => import('../dev/mix').then((m) => m.densityReport()),
       profReset: () => prof.reset(),
       backstage: () => this.run && this.openBackstage(),
       results: (won = false) => this.run && this.endRun(won),
