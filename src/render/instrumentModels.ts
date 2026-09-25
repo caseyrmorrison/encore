@@ -817,7 +817,9 @@ export function noteGeometry(): THREE.BufferGeometry {
   flagShape.bezierCurveTo(0.2, 0.5, 0.7, 0.45, 0.5, -0.1);
   flagShape.bezierCurveTo(0.6, 0.3, 0.3, 0.45, 0.03, 0.45);
   const flag = new THREE.ExtrudeGeometry(flagShape, { depth: 0.16, bevelEnabled: false });
-  const merged = mergeGeometries([head.toNonIndexed(), stem.toNonIndexed(), flag.toNonIndexed()])!;
+  // extrusions come non-indexed already; only the box needs flattening before the merge
+  const flat = (g: THREE.BufferGeometry): THREE.BufferGeometry => (g.index ? g.toNonIndexed() : g);
+  const merged = mergeGeometries([flat(head), flat(stem), flat(flag)])!;
   merged.center();
   merged.computeVertexNormals();
   return merged;
@@ -904,28 +906,261 @@ function stompbox(color: number, knobs: number, extra?: (g: THREE.Group) => void
   return g;
 }
 
+/** One bold word filling most of the texture height (labelTex keeps its title line small). */
+function wordTex(text: string, bg: string, fg: string, w: number, h: number): THREE.CanvasTexture {
+  return canvasTexture(w, h, (g) => {
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = fg;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = `${Math.round(h * 0.6)}px Bungee, Impact, sans-serif`;
+    g.fillText(text, w / 2, h * 0.54, w * 0.88);
+  });
+}
+
+/** Rounded-rect slab lying flat: w along x, d along z, bottom at y=0, top at y=h. */
+function roundedSlab(w: number, d: number, h: number, r: number, bevel = 0.05): THREE.ExtrudeGeometry {
+  const x = w / 2 - bevel;
+  const y = d / 2 - bevel;
+  const s = new THREE.Shape();
+  s.moveTo(-x + r, -y);
+  s.lineTo(x - r, -y);
+  s.quadraticCurveTo(x, -y, x, -y + r);
+  s.lineTo(x, y - r);
+  s.quadraticCurveTo(x, y, x - r, y);
+  s.lineTo(-x + r, y);
+  s.quadraticCurveTo(-x, y, -x, y - r);
+  s.lineTo(-x, -y + r);
+  s.quadraticCurveTo(-x, -y, -x + r, -y);
+  const geo = new THREE.ExtrudeGeometry(s, {
+    depth: h - bevel * 2,
+    bevelEnabled: true,
+    bevelSize: bevel,
+    bevelThickness: bevel,
+    bevelSegments: 3,
+    curveSegments: 6,
+  });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, bevel, 0);
+  return geo;
+}
+
+/** Chicken-head knob: skirted base + pointer fin with a white index line, pointing along -z. */
+function chickenHead(): THREE.Group {
+  const k = new THREE.Group();
+  const skirt = mesh(cyl(0.22, 0.08, 24), M.blackPlastic());
+  skirt.position.y = 0.04;
+  k.add(skirt);
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.36);
+  s.quadraticCurveTo(0.13, 0.08, 0.13, -0.04);
+  s.absarc(0, -0.04, 0.13, 0, Math.PI, true);
+  s.quadraticCurveTo(-0.13, 0.08, 0, 0.36);
+  const fin = mesh(
+    new THREE.ExtrudeGeometry(s, { depth: 0.14, bevelEnabled: true, bevelSize: 0.025, bevelThickness: 0.025, bevelSegments: 2 }),
+    M.blackPlastic(),
+  );
+  fin.rotation.x = -Math.PI / 2;
+  fin.position.y = 0.105;
+  k.add(fin);
+  const line = mesh(new THREE.BoxGeometry(0.04, 0.02, 0.3), M.ivory());
+  line.position.set(0, 0.27, -0.15);
+  k.add(line);
+  return k;
+}
+
+/** Jagged "fuzz" waveform band in the XY plane, centred on the origin. */
+function zigzagShape(w: number, amp: number, teeth: number, t: number): THREE.Shape {
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i <= teeth * 2; i++) pts.push(new THREE.Vector2(-w / 2 + (i / (teeth * 2)) * w, i % 2 ? amp : -amp));
+  const s = new THREE.Shape();
+  s.moveTo(pts[0]!.x, pts[0]!.y + t);
+  for (const p of pts) s.lineTo(p.x, p.y + t);
+  for (const p of [...pts].reverse()) s.lineTo(p.x, p.y - t);
+  return s;
+}
+
+/** Five-point star outline centred on the origin. */
+function starShape(ro: number, ri: number): THREE.Shape {
+  const s = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI / 2 + (i / 10) * Math.PI * 2;
+    const r = i % 2 ? ri : ro;
+    if (i === 0) s.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else s.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  return s;
+}
+
+/** Piano pedal outline: narrow shank widening into a round-nosed foot paddle, running +z from the origin. */
+function pianoPedalGeometry(): THREE.ExtrudeGeometry {
+  // outline drawn with "forward" as -y so it points down +z once laid flat
+  const s = new THREE.Shape();
+  s.moveTo(-0.08, 0.3);
+  s.lineTo(-0.08, -0.25);
+  s.quadraticCurveTo(-0.08, -0.45, -0.19, -0.6);
+  s.lineTo(-0.19, -0.9);
+  s.absarc(0, -0.9, 0.19, Math.PI, 0, false);
+  s.lineTo(0.19, -0.6);
+  s.quadraticCurveTo(0.08, -0.45, 0.08, -0.25);
+  s.lineTo(0.08, 0.3);
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.06, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 3 });
+  geo.rotateX(-Math.PI / 2);
+  return geo;
+}
+
+/** Weave texture for amp grille cloth: warm tan basket-weave that reads on dark cards. */
+function grilleTex(): THREE.CanvasTexture {
+  return canvasTexture(256, 256, (g, w, h) => {
+    g.fillStyle = '#b39a70';
+    g.fillRect(0, 0, w, h);
+    for (let i = -h; i < w; i += 10) {
+      g.strokeStyle = '#8a7350';
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(i, 0);
+      g.lineTo(i + h, h);
+      g.stroke();
+      g.strokeStyle = '#d9c69c';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(i + h, 0);
+      g.lineTo(i, h);
+      g.stroke();
+    }
+  });
+}
+
+/** Chunky high-top sneaker in profile: toe along +x, sole on y=0, centred on z. */
+function buildSneaker(color: number): THREE.Group {
+  const s = new THREE.Group();
+  const upper = new THREE.Shape();
+  upper.moveTo(-0.8, 0.18);
+  upper.quadraticCurveTo(-0.98, 0.5, -0.9, 1.3);
+  upper.lineTo(-0.32, 1.36);
+  upper.quadraticCurveTo(-0.2, 1.15, -0.1, 0.95);
+  upper.quadraticCurveTo(0.2, 0.62, 0.62, 0.52);
+  upper.quadraticCurveTo(1.06, 0.45, 1.04, 0.18);
+  upper.lineTo(-0.8, 0.18);
+  const up = mesh(
+    new THREE.ExtrudeGeometry(upper, {
+      depth: 0.46,
+      bevelEnabled: true,
+      bevelSize: 0.1,
+      bevelThickness: 0.12,
+      bevelSegments: 4,
+      curveSegments: 10,
+    }),
+    M.shell(color),
+  );
+  up.position.z = -0.23;
+  s.add(up);
+  // white rubber sole with a thin black tread and a red foxing stripe
+  const soleShape = new THREE.Shape();
+  soleShape.moveTo(-0.95, 0);
+  soleShape.lineTo(1.05, 0);
+  soleShape.quadraticCurveTo(1.32, 0.02, 1.26, 0.26);
+  soleShape.lineTo(-0.98, 0.26);
+  soleShape.quadraticCurveTo(-1.12, 0.12, -0.95, 0);
+  const sole = mesh(
+    new THREE.ExtrudeGeometry(soleShape, { depth: 0.64, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 2 }),
+    M.glove(),
+  );
+  sole.position.z = -0.32;
+  s.add(sole);
+  const tread = mesh(new THREE.BoxGeometry(2.1, 0.06, 0.66), M.rubber());
+  tread.position.set(0.12, -0.02, 0);
+  s.add(tread);
+  const stripe = mesh(new THREE.BoxGeometry(1.9, 0.045, 0.72), M.shell(0xff3b5c));
+  stripe.position.set(0.1, 0.15, 0);
+  s.add(stripe);
+  const toe = mesh(new THREE.SphereGeometry(1, 24, 16), M.glove());
+  toe.scale.set(0.36, 0.2, 0.37);
+  toe.position.set(0.88, 0.27, 0);
+  s.add(toe);
+  // white laces stepping down the instep
+  const instep = new THREE.QuadraticBezierCurve(new THREE.Vector2(-0.1, 0.95), new THREE.Vector2(0.2, 0.62), new THREE.Vector2(0.62, 0.52));
+  const laceGeo = new THREE.BoxGeometry(0.08, 0.05, 0.5);
+  for (const t of [0.05, 0.28, 0.51, 0.74]) {
+    const p = instep.getPoint(t);
+    const tan = instep.getTangent(t);
+    const lace = mesh(laceGeo, M.glove());
+    lace.position.set(p.x - tan.y * 0.12, p.y + tan.x * 0.12, 0);
+    lace.rotation.z = Math.atan2(tan.y, tan.x);
+    s.add(lace);
+  }
+  // padded collar around a dark opening
+  const hole = mesh(new THREE.CircleGeometry(1, 24), M.rubber());
+  hole.rotation.x = -Math.PI / 2;
+  hole.scale.set(0.28, 0.2, 1);
+  hole.position.set(-0.6, 1.47, 0);
+  s.add(hole);
+  const collar = mesh(new THREE.TorusGeometry(0.3, 0.07, 8, 24), M.glove());
+  collar.rotation.x = Math.PI / 2;
+  collar.scale.set(1, 0.72, 1);
+  collar.position.set(-0.6, 1.46, 0);
+  s.add(collar);
+  // ankle patch with a star
+  const patch = mesh(new THREE.CircleGeometry(0.22, 24), M.glove());
+  patch.position.set(-0.55, 0.88, 0.352);
+  s.add(patch);
+  const star = mesh(new THREE.ExtrudeGeometry(starShape(0.16, 0.07), { depth: 0.02, bevelEnabled: false }), M.shell(0xff3b5c));
+  star.position.set(-0.55, 0.88, 0.354);
+  s.add(star);
+  return s;
+}
+
 export function buildGear(id: string, color: number): THREE.Group {
   const g = new THREE.Group();
   switch (id) {
     case 'fuzz': {
-      const body = mesh(cyl(1.05, 0.5, 48), M.shell(color));
-      body.rotation.x = Math.PI / 2;
-      g.add(body);
-      const plate = mesh(cyl(0.9, 0.05, 48), M.chrome());
-      plate.rotation.x = Math.PI / 2;
-      plate.position.z = 0.27;
+      // fat enamel stompbox on the floor: three chicken-heads across the back, a jagged
+      // waveform decal, big chrome stomp switch, red LED, FUZZ badge, jacks + plugs
+      const W = 2.0;
+      const D = 1.7;
+      const H = 0.55;
+      g.add(mesh(roundedSlab(W, D, H, 0.2, 0.07), M.shell(color)));
+      const plate = mesh(roundedSlab(W - 0.06, D - 0.06, 0.08, 0.18, 0.02), M.darkChrome());
+      plate.position.y = -0.06;
       g.add(plate);
-      for (const x of [-0.38, 0.38]) {
-        const k = mesh(cyl(0.18, 0.18, 20), M.rubber());
-        k.rotation.x = Math.PI / 2;
-        k.position.set(x, 0.35, 0.35);
+      [-0.62, 0, 0.62].forEach((x, i) => {
+        const k = chickenHead();
+        k.position.set(x, H, -0.48);
+        k.scale.setScalar(1.15);
+        k.rotation.y = 0.9 - i * 0.75;
         g.add(k);
+      });
+      const zig = mesh(new THREE.ExtrudeGeometry(zigzagShape(1.6, 0.13, 6, 0.05), { depth: 0.03, bevelEnabled: false }), M.glow(0xffe14d, 2.2));
+      zig.rotation.x = -Math.PI / 2;
+      zig.position.set(0, H + 0.002, 0.02);
+      g.add(zig);
+      const nut = mesh(cyl(0.22, 0.08, 6), M.chrome());
+      nut.position.set(0, H + 0.04, 0.56);
+      const shaft = mesh(cyl(0.11, 0.1, 16), M.chrome());
+      shaft.position.set(0, H + 0.13, 0.56);
+      const cap = mesh(cyl(0.21, 0.12, 28, 0.24), M.chrome());
+      cap.position.set(0, H + 0.24, 0.56);
+      g.add(nut, shaft, cap);
+      const badge = mesh(new THREE.PlaneGeometry(0.9, 0.3), new THREE.MeshStandardMaterial({ map: wordTex('FUZZ', '#f6f3ea', '#c8102e', 300, 100), roughness: 0.4 }));
+      badge.position.set(0, H * 0.5, D / 2 + 0.003);
+      g.add(badge);
+      const led = mesh(new THREE.SphereGeometry(0.09, 16, 10), M.glow(0xff2040, 4));
+      led.position.set(0.64, H + 0.03, 0.56);
+      const bezel = mesh(new THREE.TorusGeometry(0.11, 0.03, 6, 20), M.chrome());
+      bezel.rotation.x = Math.PI / 2;
+      bezel.position.set(0.64, H + 0.01, 0.56);
+      g.add(led, bezel);
+      for (const s of [-1, 1]) {
+        const jack = mesh(cyl(0.13, 0.06, 6), M.chrome());
+        jack.rotation.z = Math.PI / 2;
+        jack.position.set(s * (W / 2 + 0.02), H * 0.5, -0.2);
+        const plug = mesh(cyl(0.085, 0.22, 16), M.chrome());
+        plug.rotation.z = Math.PI / 2;
+        plug.position.set(s * (W / 2 + 0.13), H * 0.5, -0.2);
+        g.add(jack, plug);
       }
-      const sw = mesh(cyl(0.2, 0.2, 20), M.chrome());
-      sw.rotation.x = Math.PI / 2;
-      sw.position.set(0, -0.35, 0.36);
-      g.add(sw);
-      g.rotation.set(-0.5, 0.3, 0);
+      g.rotation.set(0.64, -0.45, 0);
       return g;
     }
     case 'metronome': {
@@ -969,17 +1204,69 @@ export function buildGear(id: string, color: number): THREE.Group {
       return g;
     }
     case 'wah': {
-      const base = mesh(new THREE.BoxGeometry(1.1, 0.35, 2.3), M.darkChrome());
+      // long low wedge base; an enamel rocker treadle hinged at the heel with its toe
+      // raised ~12°, black grip pad with raised ridges, chrome rails, and the toe switch
+      // visible in the gap below
+      const L = 2.7;
+      const Wd = 1.3;
+      const wedge = new THREE.Shape();
+      wedge.moveTo(-L / 2 + 0.05, 0.05);
+      wedge.lineTo(L / 2 - 0.05, 0.05);
+      wedge.lineTo(L / 2 - 0.05, 0.5);
+      wedge.lineTo(-L / 2 + 0.05, 0.3);
+      wedge.lineTo(-L / 2 + 0.05, 0.05);
+      const base = mesh(
+        new THREE.ExtrudeGeometry(wedge, { depth: Wd - 0.1, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 3 }),
+        M.shell(color),
+      );
+      base.position.z = -(Wd - 0.1) / 2;
       g.add(base);
-      const treadle = mesh(new THREE.BoxGeometry(1.0, 0.12, 2.0), M.shell(color));
-      treadle.position.set(0, 0.35, 0.05);
-      treadle.rotation.x = -0.22;
-      g.add(treadle);
-      const grip = mesh(new THREE.BoxGeometry(0.9, 0.04, 1.6), M.rubber());
-      grip.position.set(0, 0.43, 0.05);
-      grip.rotation.x = -0.22;
-      g.add(grip);
-      g.rotation.set(0.7, 0.45, 0);
+      const hingeX = -L / 2 + 0.25;
+      const axle = mesh(cyl(0.08, Wd + 0.12, 16), M.chrome());
+      axle.rotation.x = Math.PI / 2;
+      axle.position.set(hingeX, 0.4, 0);
+      g.add(axle);
+      const rocker = new THREE.Group();
+      rocker.position.set(hingeX, 0.42, 0);
+      rocker.rotation.z = 0.21;
+      g.add(rocker);
+      const TL = 2.5;
+      const tread = mesh(roundedSlab(TL, Wd - 0.08, 0.14, 0.12, 0.04), M.shell(color));
+      tread.position.x = TL / 2 - 0.25;
+      rocker.add(tread);
+      const pad = mesh(roundedSlab(TL - 0.34, Wd - 0.32, 0.04, 0.08, 0.015), M.rubber());
+      pad.position.set(TL / 2 - 0.25, 0.13, 0);
+      rocker.add(pad);
+      for (const s of [-1, 1]) {
+        const rail = mesh(new THREE.BoxGeometry(TL - 0.1, 0.18, 0.05), M.chrome());
+        rail.position.set(TL / 2 - 0.25, 0.04, s * (Wd / 2 - 0.02));
+        rocker.add(rail);
+      }
+      const toePlate = mesh(new THREE.BoxGeometry(0.06, 0.18, Wd - 0.2), M.chrome());
+      toePlate.position.set(TL - 0.24, 0.07, 0);
+      rocker.add(toePlate);
+      const ridgeGeo = new THREE.BoxGeometry(0.08, 0.06, Wd - 0.4);
+      const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x4a4a56, roughness: 0.45 });
+      for (let i = 0; i < 7; i++) {
+        const r = mesh(ridgeGeo, ridgeMat);
+        r.position.set(0.12 + i * 0.3, 0.19, 0);
+        rocker.add(r);
+      }
+      const sw = mesh(cyl(0.1, 0.24, 16), M.chrome());
+      sw.position.set(L / 2 - 0.4, 0.58, 0);
+      const swCap = mesh(cyl(0.13, 0.07, 16), M.rubber());
+      swCap.position.set(L / 2 - 0.4, 0.72, 0);
+      g.add(sw, swCap);
+      for (const s of [-1, 1]) {
+        const jack = mesh(cyl(0.1, 0.06, 6), M.chrome());
+        jack.rotation.x = Math.PI / 2;
+        jack.position.set(0.7, 0.18, s * (Wd / 2 + 0.02));
+        g.add(jack);
+      }
+      const led = mesh(new THREE.SphereGeometry(0.06, 12, 8), M.glow(0xff2040, 4));
+      led.position.set(L / 2 - 0.02, 0.2, 0);
+      g.add(led);
+      g.rotation.set(0.42, -0.75, 0);
       return g;
     }
     case 'looper': {
@@ -1006,21 +1293,58 @@ export function buildGear(id: string, color: number): THREE.Group {
       return g;
     }
     case 'roadie': {
-      const box = mesh(new THREE.BoxGeometry(2.2, 1.4, 1.3), new THREE.MeshStandardMaterial({ color: 0x1e1e24, roughness: 0.5, metalness: 0.2 }));
-      g.add(box);
-      for (const x of [-1.08, 1.08])
-        for (const y of [-0.68, 0.68])
-          for (const z of [-0.63, 0.63]) {
-            const c = mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), M.chrome());
+      // road case: slate laminate panels framed by bright aluminium edge rails and ball
+      // corners, a lid seam with butterfly latches, gaffer-tape label, glowing hi-vis band
+      const W = 2.3;
+      const H = 1.45;
+      const D = 1.35;
+      g.add(mesh(new THREE.BoxGeometry(W, H, D), new THREE.MeshStandardMaterial({ color: 0x6c7892, roughness: 0.5, metalness: 0.2 })));
+      const ex = 0.09;
+      for (const a of [-1, 1])
+        for (const b of [-1, 1]) {
+          const ew = mesh(new THREE.BoxGeometry(W, ex, ex), M.chrome());
+          ew.position.set(0, (a * H) / 2, (b * D) / 2);
+          const eh = mesh(new THREE.BoxGeometry(ex, H, ex), M.chrome());
+          eh.position.set((a * W) / 2, 0, (b * D) / 2);
+          const ed = mesh(new THREE.BoxGeometry(ex, ex, D), M.chrome());
+          ed.position.set((a * W) / 2, (b * H) / 2, 0);
+          g.add(ew, eh, ed);
+        }
+      const ballGeo = new THREE.SphereGeometry(0.13, 16, 12);
+      for (const x of [-W / 2, W / 2])
+        for (const y of [-H / 2, H / 2])
+          for (const z of [-D / 2, D / 2]) {
+            const c = mesh(ballGeo, M.chrome());
             c.position.set(x, y, z);
             g.add(c);
           }
-      const handle = mesh(new THREE.TorusGeometry(0.3, 0.05, 8, 20, Math.PI), M.chrome());
-      handle.position.set(0, 0.72, 0);
-      g.add(handle);
-      const stripe = mesh(new THREE.BoxGeometry(2.21, 0.12, 1.31), M.shell(color));
-      g.add(stripe);
-      g.rotation.set(0.4, -0.5, 0);
+      const seamY = H / 2 - 0.38;
+      const seam = mesh(new THREE.BoxGeometry(W + 0.02, 0.06, D + 0.02), M.chrome());
+      seam.position.y = seamY;
+      g.add(seam);
+      for (const x of [-0.65, 0.65]) {
+        const dish = mesh(new THREE.BoxGeometry(0.34, 0.3, 0.04), M.darkChrome());
+        dish.position.set(x, seamY, D / 2 + 0.02);
+        const wing = mesh(new THREE.BoxGeometry(0.22, 0.08, 0.06), M.chrome());
+        wing.position.set(x, seamY, D / 2 + 0.05);
+        g.add(dish, wing);
+      }
+      const handleDish = mesh(new THREE.BoxGeometry(0.8, 0.03, 0.42), M.darkChrome());
+      handleDish.position.y = H / 2 + 0.015;
+      const handle = mesh(new THREE.TorusGeometry(0.28, 0.05, 8, 20, Math.PI), M.chrome());
+      handle.position.y = H / 2 + 0.02;
+      g.add(handleDish, handle);
+      const tape = mesh(
+        new THREE.PlaneGeometry(1.4, 0.4),
+        new THREE.MeshStandardMaterial({ map: wordTex('ROADIE', '#f1ede2', '#1a1a22', 350, 100), roughness: 0.8 }),
+      );
+      tape.position.set(-0.1, -0.18, D / 2 + 0.005);
+      tape.rotation.z = 0.04;
+      g.add(tape);
+      const band = mesh(new THREE.BoxGeometry(W + 0.01, 0.07, D + 0.01), M.glow(0x2ee6ff, 1.8));
+      band.position.y = -H / 2 + 0.25;
+      g.add(band);
+      g.rotation.set(0.4, 0.5, 0);
       return g;
     }
     case 'energy': {
@@ -1038,60 +1362,151 @@ export function buildGear(id: string, color: number): THREE.Group {
       return g;
     }
     case 'stagedive': {
-      for (const [x, r] of [
-        [-0.55, 0.25],
-        [0.55, -0.25],
+      // a high-top mid-dive, nose down, trailing speed streaks over a crowd of raised hands
+      const shoe = buildSneaker(color);
+      shoe.rotation.z = -0.45;
+      shoe.position.set(0.1, 0.35, 0);
+      g.add(shoe);
+      for (const [y, len] of [
+        [0.3, 0.9],
+        [0.75, 1.4],
+        [1.2, 1.0],
+      ] as const) {
+        const st = mesh(new THREE.CapsuleGeometry(0.045, len, 4, 8), M.glow(0xfff1b8, 2.2));
+        st.rotation.z = Math.PI / 2;
+        st.position.set(-1.25 - len / 2, y, 0);
+        shoe.add(st);
+      }
+      // the crowd: open hands fanned up underneath, ready to catch the diver
+      for (const [x, y, rz, s] of [
+        [-0.6, -0.95, 0.4, 0.62],
+        [0.2, -0.8, 0.0, 0.7],
+        [0.95, -0.95, -0.4, 0.62],
       ] as const) {
         const h = buildGloveHand();
-        h.position.set(x, 0, 0);
-        h.rotation.z = r;
+        h.scale.setScalar(s);
+        h.position.set(x, y, 0.2);
+        h.rotation.set(0.25, 0, rz);
         g.add(h);
       }
-      const star = mesh(new THREE.OctahedronGeometry(0.28), M.glow(color, 3));
-      star.position.set(0, 1.25, 0);
-      g.add(star);
-      g.rotation.set(-0.2, 0.2, 0);
+      g.rotation.set(0.15, -0.35, 0);
       return g;
     }
     case 'hypeman': {
-      const horn = mesh(new THREE.CylinderGeometry(0.95, 0.2, 1.8, 32, 1, true), M.shell(color));
-      horn.rotation.z = Math.PI / 2;
+      // megaphone: glossy horn with a white band + chrome rim, pale throat lit by a glowing
+      // driver, white driver housing, pistol grip, and sound arcs blasting out of the bell
+      const horn = mesh(new THREE.CylinderGeometry(0.95, 0.28, 1.7, 40, 1, true), M.shell(color));
+      horn.rotation.z = -Math.PI / 2;
       g.add(horn);
-      const inside = mesh(new THREE.CylinderGeometry(0.9, 0.18, 1.75, 32, 1, true), new THREE.MeshStandardMaterial({ color: 0x111111, side: THREE.BackSide }));
-      inside.rotation.z = Math.PI / 2;
-      g.add(inside);
-      const bell = mesh(new THREE.TorusGeometry(0.95, 0.07, 10, 40), M.chrome());
-      bell.rotation.y = Math.PI / 2;
-      bell.position.x = -0.9;
-      g.add(bell);
-      const grip = mesh(new THREE.BoxGeometry(0.22, 0.8, 0.22), M.rubber());
-      grip.position.set(0.4, -0.55, 0);
-      g.add(grip);
-      g.rotation.set(0.2, 0.9, 0.15);
+      const throat = mesh(
+        new THREE.CylinderGeometry(0.93, 0.26, 1.68, 40, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xe8e2d6, roughness: 0.55, side: THREE.BackSide }),
+      );
+      throat.rotation.z = -Math.PI / 2;
+      g.add(throat);
+      const driver = mesh(new THREE.CircleGeometry(0.27, 24), M.glow(color, 2.2));
+      driver.rotation.y = Math.PI / 2;
+      driver.position.x = -0.83;
+      g.add(driver);
+      const band = mesh(new THREE.CylinderGeometry(0.925, 0.835, 0.22, 40, 1, true), M.glove());
+      band.rotation.z = -Math.PI / 2;
+      band.position.x = 0.62;
+      g.add(band);
+      const rim = mesh(new THREE.TorusGeometry(0.95, 0.06, 10, 48), M.chrome());
+      rim.rotation.y = Math.PI / 2;
+      rim.position.x = 0.85;
+      g.add(rim);
+      const body = mesh(cyl(0.34, 0.7, 32), M.ivory());
+      body.rotation.z = Math.PI / 2;
+      body.position.x = -1.2;
+      const cap = mesh(cyl(0.3, 0.08, 32), M.chrome());
+      cap.rotation.z = Math.PI / 2;
+      cap.position.x = -1.58;
+      g.add(body, cap);
+      const grip = mesh(new THREE.CapsuleGeometry(0.12, 0.5, 4, 12), M.rubber());
+      grip.position.set(-1.05, -0.62, 0);
+      grip.rotation.z = -0.25;
+      const trigger = mesh(new THREE.BoxGeometry(0.1, 0.22, 0.1), M.shell(color));
+      trigger.position.set(-0.84, -0.46, 0);
+      g.add(grip, trigger);
+      for (const r of [1.1, 1.45, 1.8]) {
+        const arc = mesh(new THREE.TorusGeometry(r, 0.05, 6, 32, 1.3), M.glow(color, 2.2));
+        arc.rotation.z = -0.65;
+        arc.position.x = 0.2;
+        g.add(arc);
+      }
+      g.rotation.set(0.18, -0.45, 0.08);
       return g;
     }
     case 'ampstack': {
-      const combo = mesh(new THREE.BoxGeometry(2.2, 1.7, 1.0), new THREE.MeshStandardMaterial({ color: 0x151318, roughness: 0.7 }));
-      g.add(combo);
-      const grille = mesh(new THREE.PlaneGeometry(1.9, 1.05), new THREE.MeshStandardMaterial({ color: 0x3a3228, roughness: 0.95 }));
-      grille.position.set(0, -0.2, 0.51);
+      // half stack: head on a 4x12. Lifted tolex, tan weave grilles with white piping,
+      // gold control panel with cream knobs, glowing logo, pilot jewel and amber trim
+      const tolex = new THREE.MeshStandardMaterial({ color: 0x3a3544, roughness: 0.5, metalness: 0.15 });
+      const cloth = new THREE.MeshStandardMaterial({ map: grilleTex(), roughness: 0.9 });
+      const W = 2.3;
+      const cab = mesh(new THREE.BoxGeometry(W, 2.0, 1.1), tolex);
+      cab.position.y = -0.6;
+      g.add(cab);
+      const grille = mesh(new THREE.PlaneGeometry(W - 0.34, 1.66), cloth);
+      grille.position.set(0, -0.6, 0.551);
       g.add(grille);
-      const panel = mesh(new THREE.BoxGeometry(2.0, 0.3, 0.05), M.gold());
-      panel.position.set(0, 0.62, 0.51);
+      const pipeH = new THREE.CylinderGeometry(0.03, 0.03, W - 0.3, 8);
+      const pipeV = new THREE.CylinderGeometry(0.03, 0.03, 1.7, 8);
+      for (const s of [-1, 1]) {
+        const ph = mesh(pipeH, M.glove());
+        ph.rotation.z = Math.PI / 2;
+        ph.position.set(0, -0.6 + s * 0.84, 0.56);
+        const pv = mesh(pipeV, M.glove());
+        pv.position.set((s * (W - 0.32)) / 2, -0.6, 0.56);
+        g.add(ph, pv);
+      }
+      const logo = mesh(
+        new THREE.PlaneGeometry(1.0, 0.28),
+        new THREE.MeshStandardMaterial({
+          map: wordTex('ENCORE', '#1c1822', '#ffc85a', 360, 100),
+          emissive: 0xffffff,
+          emissiveMap: wordTex('ENCORE', '#000000', '#ffc85a', 360, 100),
+          emissiveIntensity: 1.6,
+        }),
+      );
+      logo.position.set(-0.4, 0.0, 0.565);
+      g.add(logo);
+      const head = mesh(new THREE.BoxGeometry(W, 0.8, 1.0), tolex);
+      head.position.y = 0.85;
+      g.add(head);
+      const headCloth = mesh(new THREE.PlaneGeometry(W - 0.24, 0.26), cloth);
+      headCloth.position.set(0, 0.62, 0.501);
+      g.add(headCloth);
+      const panel = mesh(new THREE.BoxGeometry(W - 0.2, 0.34, 0.04), M.gold());
+      panel.position.set(0, 0.99, 0.51);
       g.add(panel);
-      for (let i = 0; i < 5; i++) {
-        const k = mesh(cyl(0.07, 0.08, 12), M.rubber());
+      for (let i = 0; i < 6; i++) {
+        const k = mesh(cyl(0.08, 0.09, 16), M.ivory());
         k.rotation.x = Math.PI / 2;
-        k.position.set(-0.7 + i * 0.35, 0.62, 0.56);
+        k.position.set(-0.85 + i * 0.3, 0.99, 0.56);
         g.add(k);
       }
-      const handle = mesh(new THREE.TorusGeometry(0.35, 0.06, 8, 20, Math.PI), M.rubber());
-      handle.position.y = 0.88;
-      g.add(handle);
-      const pilot = mesh(new THREE.SphereGeometry(0.07, 8, 6), M.glow(0xff2020, 4));
-      pilot.position.set(0.88, 0.62, 0.56);
+      const pilot = mesh(new THREE.SphereGeometry(0.08, 12, 8), M.glow(0xff2020, 4));
+      pilot.position.set(0.97, 0.99, 0.55);
       g.add(pilot);
-      g.rotation.set(0.25, -0.45, 0);
+      const trimGlow = mesh(new THREE.BoxGeometry(W - 0.2, 0.04, 0.03), M.glow(0xffb13d, 2));
+      trimGlow.position.set(0, 0.8, 0.52);
+      g.add(trimGlow);
+      const handle = mesh(new THREE.TorusGeometry(0.35, 0.06, 8, 20, Math.PI), M.rubber());
+      handle.position.y = 1.25;
+      g.add(handle);
+      const cornerGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+      for (const [y0, hh, dd] of [
+        [-0.6, 2.0, 1.1],
+        [0.85, 0.8, 1.0],
+      ] as const)
+        for (const x of [-W / 2, W / 2])
+          for (const y of [y0 - hh / 2, y0 + hh / 2]) {
+            const c = mesh(cornerGeo, M.chrome());
+            c.position.set(x, y, dd / 2);
+            g.add(c);
+          }
+      g.rotation.set(0.2, 0.45, 0);
       return g;
     }
     case 'encore': {
@@ -1145,17 +1560,37 @@ export function buildGear(id: string, color: number): THREE.Group {
       return g;
     }
     case 'sustain': {
-      const base = mesh(new THREE.BoxGeometry(1.2, 0.3, 1.8), M.blackPlastic());
-      g.add(base);
-      const lever = mesh(new THREE.BoxGeometry(0.7, 0.1, 1.9), M.chrome());
-      lever.position.set(0, 0.35, 0.2);
-      lever.rotation.x = -0.18;
-      g.add(lever);
-      const cable = mesh(new THREE.TorusGeometry(0.6, 0.05, 6, 24, Math.PI), M.rubber());
-      cable.position.set(0, 0.1, -1.0);
-      cable.rotation.y = Math.PI / 2;
-      g.add(cable);
-      g.rotation.set(0.75, 0.5, 0);
+      // grand-piano pedal box: polished wood with brass trim and three brass pedals;
+      // the sustain (right) pedal is held down and notes ring up out of it
+      const wood = new THREE.MeshPhysicalMaterial({ color: 0x7a3a1c, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.12 });
+      const box = mesh(roundedSlab(2.4, 1.0, 0.6, 0.12, 0.05), wood);
+      box.position.y = -0.3;
+      g.add(box);
+      const trim = mesh(new THREE.BoxGeometry(2.3, 0.05, 0.05), M.gold());
+      trim.position.set(0, 0.27, 0.49);
+      g.add(trim);
+      const slot = mesh(new THREE.BoxGeometry(1.9, 0.2, 0.02), M.darkChrome());
+      slot.position.set(0, -0.02, 0.5);
+      g.add(slot);
+      const pedalGeo = pianoPedalGeometry();
+      [-0.62, 0, 0.62].forEach((x, i) => {
+        const p = mesh(pedalGeo, M.gold());
+        p.position.set(x, -0.02, 0.4);
+        p.rotation.x = i === 2 ? 0.24 : 0.06;
+        g.add(p);
+      });
+      for (const [x, y, z, s] of [
+        [0.95, 0.4, 1.25, 0.44],
+        [1.4, 1.0, 0.95, 0.36],
+        [1.0, 1.55, 0.65, 0.28],
+      ] as const) {
+        const n = buildNote(color);
+        n.scale.setScalar(s);
+        n.position.set(x, y, z);
+        n.rotation.set(0, -0.3, 0.2);
+        g.add(n);
+      }
+      g.rotation.set(0.4, -0.5, 0);
       return g;
     }
     default:

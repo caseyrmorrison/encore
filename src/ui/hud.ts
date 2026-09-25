@@ -21,7 +21,6 @@ export class Hud {
   private readonly kills: HTMLElement;
   private readonly tips: HTMLElement;
   private readonly level: HTMLElement;
-  private readonly xpFill: HTMLElement;
   private readonly mini: HTMLElement;
   private miniCells: HTMLElement[][] = [];
   private miniVersion = -1;
@@ -65,7 +64,6 @@ export class Hud {
     this.kills = h('div', { class: 'stat-val' });
     this.tips = h('div', { class: 'stat-val' });
     this.level = h('div', { class: 'lvl-badge' });
-    this.xpFill = h('div', { class: 'xp-fill' });
     this.mini = h('div', { class: 'mini-seq' });
     this.chips = h('div', { class: 'groove-chips' });
     this.streakNum = h('div', { class: 'streak-num' });
@@ -103,7 +101,6 @@ export class Hud {
       this.muffled,
       this.perfect,
       (this.bottom = h('div', { class: 'hud-bottom' }, [this.chips, this.mini])),
-      h('div', { class: 'xp-bar' }, [this.xpFill]),
     ]);
     root.append(this.el);
   }
@@ -162,11 +159,17 @@ export class Hud {
     this.set('sett', Math.floor(remain), () => (this.setTime.textContent = remain > 0 ? formatTime(remain) : 'HEADLINER'));
     this.set('kills', run.kills, () => (this.kills.textContent = formatInt(run.kills)));
     this.set('tips', run.tips, () => (this.tips.textContent = formatInt(run.tips)));
-    this.set('lvl', run.level, () => (this.level.textContent = `LV ${run.level}`));
+    this.set('lvl', run.level, () => {
+      this.level.textContent = `LV ${run.level}`;
+      this.level.classList.remove('up');
+      void this.level.offsetWidth;
+      this.level.classList.add('up');
+    });
+    // the ring is the only XP readout: it fills clockwise and hums when a level is close
     this.set('xp', Math.round((run.xp / run.xpToNext) * 400), () => {
       const k = Math.min(1, run.xp / run.xpToNext);
-      this.xpFill.style.transform = `scaleX(${k})`;
       this.level.style.setProperty('--xp', k.toFixed(3));
+      this.level.classList.toggle('near', k > 0.85);
     });
 
     // streak
@@ -210,6 +213,8 @@ export class Hud {
       this.miniVersion = p.version;
       clear(this.mini);
       this.miniCells = [];
+      // a big band packs tighter so the machine never eats the bottom of the arena
+      this.mini.classList.toggle('many', p.tracks.length > 5);
       for (const t of p.tracks) {
         const row = h('div', { class: 'mini-row' }, [h('span', { class: 'mini-label', text: INSTRUMENTS[t.inst].short })]);
         row.style.setProperty('--c', INSTRUMENTS[t.inst].css);
@@ -232,6 +237,8 @@ export class Hud {
   }
 
   /** Gig-poster stamp slammed onto the screen when a groove is discovered. */
+  private readonly stamps = new Set<HTMLElement>();
+
   stamp(genre: string, name: string, bonus: string, color: string, firstEver: boolean): void {
     const el = h('div', { class: 'stamp' }, [
       h('div', {
@@ -246,14 +253,26 @@ export class Hud {
     el.style.setProperty('--rot', `${(Math.random() - 0.5) * 10}deg`);
     show(this.banner, false);
     this.bannerT = 0;
+    this.dismissStamps();
+    this.stamps.add(el);
     document.body.append(el);
     setTimeout(() => el.classList.add('out'), 2300);
-    setTimeout(() => el.remove(), 2900);
+    setTimeout(() => {
+      el.remove();
+      this.stamps.delete(el);
+    }, 2900);
+  }
+
+  /** A drop owns the centre of the screen: any stamp still on it bows out immediately. */
+  dismissStamps(): void {
+    for (const el of this.stamps) el.classList.add('out');
   }
 
   /** Giant beat countdown during a build-up. */
   countdown(n: string, x?: number, y?: number): void {
     const c = h('div', { class: 'countdown', text: n });
+    // each beat of the count heats up: cool cyan → gold → orange → hot pink on the last
+    c.style.setProperty('--cc', ({ '4': '#2ee6ff', '3': '#ffe14d', '2': '#ff9a2e', '1': '#ff2d78' } as Record<string, string>)[n] ?? '#ff2d78');
     if (x !== undefined && y !== undefined) {
       c.style.setProperty('--x', `${x}px`);
       c.style.setProperty('--y', `${Math.max(120, y - 150)}px`);
@@ -301,6 +320,23 @@ export class Hud {
   }
 
   /** Dim the bottom machine when the player is standing under it. */
+  private bottomTopY = 0;
+  private bottomMeasure = 0;
+
+  /** Fade the drum machine only when the performer actually walks under it. */
+  fadeForPlayer(screenY: number): void {
+    if (--this.bottomMeasure <= 0) {
+      this.bottomTopY = this.bottom.getBoundingClientRect().top || window.innerHeight;
+      this.bottomMeasure = 30;
+    }
+    this.setBottomFade(screenY > this.bottomTopY - 60);
+  }
+
+  /** Victory lap: the chrome steps aside so the show fills the screen. */
+  setCinematic(on: boolean): void {
+    this.set('cine', on ? 1 : 0, () => this.el.classList.toggle('cinematic', on));
+  }
+
   setBottomFade(on: boolean): void {
     this.set('bfade', on ? 1 : 0, () => this.bottom.classList.toggle('fade', on));
   }

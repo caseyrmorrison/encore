@@ -460,6 +460,21 @@ const S = {
     await sleep(700);
     await shot('merch');
   },
+  async settings() {
+    await start();
+    await E(() => {
+      const d = window.__encore;
+      d.god();
+      for (const i of ['hat', 'bass', 'clap']) d.give(i);
+    });
+    await dance(5000);
+    await page.keyboard.press('Escape');
+    await sleep(900);
+    await shot('pause');
+    await page.locator('.pause button', { hasText: 'SETTINGS' }).click();
+    await sleep(700);
+    await shot('settings');
+  },
   async howto() {
     await page.mouse.click(w / 2, hgt / 2);
     await sleep(300);

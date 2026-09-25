@@ -36,6 +36,8 @@ export interface BossCtx {
   shake(n: number): void;
   roar(): void;
   setSilence(on: boolean): void;
+  /** The crowd throws the performer a lifeline: hearts land near the player. */
+  crowdAid(hearts: number): void;
   hpMult: number;
   /** camera orientation, for billboards */
   camQuat: THREE.Quaternion;
@@ -538,7 +540,8 @@ export class Cantor extends Boss {
       h.position.y = 3.4 + Math.sin(time * 2 + i * 2) * 0.6;
     });
     this.bodyMat.uniforms.uTime!.value = time;
-    (this.bodyMat.uniforms.uState!.value as THREE.Vector4).x = Math.min(1, e.flash);
+    // an eclipse never lifts out of black: hits only catch the rim and blaze the eyes
+    (this.bodyMat.uniforms.uState!.value as THREE.Vector4).x = Math.min(0.3, e.flash);
     (this.bodyMat.uniforms.uCamDir!.value as THREE.Vector3).set(0, 0, 1).applyQuaternion(ctx.camQuat);
     for (let i = this.zones.length - 1; i >= 0; i--) {
       const zn = this.zones[i]!;
@@ -578,6 +581,7 @@ export class TheHush extends Boss {
     this.bodyMat = makeHushMaterial(look, new THREE.Color(0x2a1a40), new THREE.Color(0x000000));
     (this.bodyMat.uniforms.uEyeParams!.value as THREE.Vector4).set(0.6, 0.16, 0.2, 5);
     (this.bodyMat.uniforms.uRimShape!.value as THREE.Vector2).set(6, 0.5);
+    this.bodyMat.uniforms.uVoid!.value = 1;
     this.sun = new THREE.Mesh(look.geometry, this.bodyMat);
     this.sun.scale.setScalar(8);
     this.sun.position.y = -1;
@@ -590,20 +594,21 @@ export class TheHush extends Boss {
         void main(){
           vec2 q = (vUv - 0.5) * 2.0; float r = length(q); float a = atan(q.y, q.x + 1e-4);
           // eclipse: a razor-thin white-hot rim, then streaming coronal flares
-          float rim = smoothstep(0.03, 0.0, abs(r - 0.4)) * (1.5 + uPulse * 2.0);
-          float f1 = pow(max(0.0, sin(a * 7.0 + uTime * 0.8)), 14.0);
-          float f2 = pow(max(0.0, sin(a * 13.0 - uTime * 1.3 + 1.7)), 22.0);
-          float flare = (f1 * 0.6 + f2 * 0.8) * smoothstep(0.8, 0.4, r) * step(0.39, r);
-          float glow = smoothstep(0.75, 0.4, r) * step(0.39, r) * 0.25;
-          float v = rim + flare * (0.9 + uPulse) + glow;
-          gl_FragColor = vec4(uColor * v * 0.85, clamp(v, 0.0, 1.0));
+          // (kept dim: bloom spreads anything brighter over the body and the eclipse turns grey)
+          float rim = smoothstep(0.018, 0.0, abs(r - 0.47)) * (1.2 + uPulse * 1.4);
+          float f1 = pow(max(0.0, sin(a * 7.0 + uTime * 0.8)), 16.0);
+          float f2 = pow(max(0.0, sin(a * 13.0 - uTime * 1.3 + 1.7)), 26.0);
+          float flare = (f1 * 0.5 + f2 * 0.6) * smoothstep(0.85, 0.47, r) * step(0.47, r);
+          float glow = smoothstep(0.7, 0.47, r) * step(0.47, r) * 0.1;
+          float v = rim + flare * (0.5 + uPulse * 0.6) + glow;
+          gl_FragColor = vec4(uColor * v * 0.55, clamp(v, 0.0, 1.0));
         }`,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
-    this.corona = new THREE.Mesh(new THREE.PlaneGeometry(19, 19), this.coronaMat);
+    this.corona = new THREE.Mesh(new THREE.PlaneGeometry(17, 17), this.coronaMat);
     this.corona.position.y = 4;
     this.group.add(this.corona);
   }
@@ -651,10 +656,12 @@ export class TheHush extends Boss {
       this.silence = true;
       ctx.setSilence(true);
       ctx.roar();
+      ctx.crowdAid(2);
     }
     if (this.phase === 2 && this.hpFrac < 0.33) {
       this.phase = 3;
       ctx.roar();
+      ctx.crowdAid(3);
     }
     const dx = ctx.px - e.x;
     const dz = ctx.pz - e.z;
@@ -674,13 +681,14 @@ export class TheHush extends Boss {
     this.coronaBack.set(0, 0, -1).applyQuaternion(ctx.camQuat).multiplyScalar(-4.5);
     this.corona.position.set(this.coronaBack.x, 3 + this.coronaBack.y, this.coronaBack.z);
     this.bodyMat.uniforms.uTime!.value = time;
-    (this.bodyMat.uniforms.uState!.value as THREE.Vector4).x = Math.min(1, e.flash);
+    // an eclipse never lifts out of black: hits only catch the rim and blaze the eyes
+    (this.bodyMat.uniforms.uState!.value as THREE.Vector4).x = Math.min(0.3, e.flash);
     (this.bodyMat.uniforms.uState!.value as THREE.Vector4).z = this.stunned > 0 ? 0.6 : 0;
     (this.bodyMat.uniforms.uCamDir!.value as THREE.Vector3).set(0, 0, 1).applyQuaternion(ctx.camQuat);
 
     if (this.phase >= 3 && this.stunned === 0) {
       // four sweeping corona lasers
-      this.laserAngle += dt * 0.55;
+      this.laserAngle += dt * 0.45;
       for (let k = 0; k < 4; k++) {
         const a = this.laserAngle + (k * Math.PI) / 2;
         const ex = e.x + Math.cos(a) * 34;
@@ -692,7 +700,7 @@ export class TheHush extends Boss {
         const pz = ctx.pz - e.z;
         const along = px * Math.cos(a) + pz * Math.sin(a);
         const perp = Math.abs(-px * Math.sin(a) + pz * Math.cos(a));
-        if (along > 0 && along < 34 && perp < 0.9 && !ctx.playerInvuln) ctx.hurtPlayer(20, e.x, e.z);
+        if (along > 0 && along < 34 && perp < 0.9 && !ctx.playerInvuln) ctx.hurtPlayer(15, e.x, e.z);
       }
     }
   }

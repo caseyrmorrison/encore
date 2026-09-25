@@ -52,6 +52,8 @@ export interface Venue {
   onNote?(inst: string, strength: number): void;
   /** Fade props that stand between the camera and the action. */
   occlude?(px: number, pz: number): void;
+  /** The headliner fell: the room goes all-out until the run ends. */
+  finale?(): void;
   ripple(x: number, z: number, color: THREE.Color | number, strength?: number): void;
   spawnPoint(rng: Rng, px: number, pz: number, out: { x: number; z: number }): void;
   dispose(): void;

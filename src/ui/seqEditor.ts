@@ -6,6 +6,8 @@ import { clear, h } from './dom';
 
 export type EditMode = { kind: 'free' } | { kind: 'fx'; fx: FxKind };
 
+const FX_GLYPH: Record<FxKind, string> = { accent: '⚡', ratchet: '×2', echo: '◎' };
+
 export interface EditorEvents {
   placed(trackIndex: number, step: number): void;
   lifted(trackIndex: number, step: number): void;
@@ -21,6 +23,7 @@ export class SeqEditor {
   readonly el: HTMLElement;
   private readonly grid: HTMLElement;
   private readonly grooveList: HTMLElement;
+  private grooveCount!: HTMLElement;
   private readonly hint: HTMLElement;
   private cells: HTMLElement[][] = [];
   private heads: HTMLElement[] = [];
@@ -50,7 +53,10 @@ export class SeqEditor {
         ]),
         this.grid,
       ]),
-      h('div', { class: 'groove-panel' }, [h('div', { class: 'panel-title', text: 'GROOVES' }), this.grooveList]),
+      h('div', { class: 'groove-panel' }, [
+        h('div', { class: 'panel-title' }, ['GROOVES ', (this.grooveCount = h('span', { class: 'groove-count' }))]),
+        this.grooveList,
+      ]),
     ]);
     this.rebuild();
   }
@@ -162,14 +168,15 @@ export class SeqEditor {
       const head = this.heads[s]!;
       const fxEl = head.querySelector('.step-fx')!;
       const parts: string[] = [];
-      if (f.accent) parts.push('⚡');
+      if (f.accent) parts.push(FX_GLYPH.accent);
       if (f.ratchet > 1) parts.push(`×${f.ratchet}`);
-      if (f.echo) parts.push('◎');
+      if (f.echo) parts.push(FX_GLYPH.echo);
       fxEl.textContent = parts.join(' ');
       head.classList.toggle('has-fx', parts.length > 0);
       head.classList.toggle('chord', p.tracksOnStep(s) >= 2);
       const can = this.mode.kind === 'fx' && p.canApplyFx(s, this.mode.fx);
       head.classList.toggle('targetable', can);
+      if (this.mode.kind === 'fx') fxEl.setAttribute('data-ghost', FX_GLYPH[this.mode.fx]);
       for (const row of this.cells) row[s]!.classList.toggle('fx-target', can);
     }
     const spareTotal = p.tracks.reduce((a, t) => a + t.spare, 0);
@@ -187,7 +194,11 @@ export class SeqEditor {
   private renderGrooves(g: GrooveState): void {
     clear(this.grooveList);
     const disc = this.discovered();
-    for (const id of GROOVE_IDS) {
+    // what's live and what you know float to the top; riddles sink (the panel scrolls)
+    const rank = (id: GrooveId): number => (g.active.has(id) ? 0 : disc.has(id) ? 1 : 2);
+    const ids = [...GROOVE_IDS].sort((a, b) => rank(a) - rank(b));
+    this.grooveCount.textContent = `${disc.size}/${GROOVE_IDS.length}`;
+    for (const id of ids) {
       const d = GROOVES[id];
       const known = disc.has(id);
       const on = g.active.has(id);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Rng } from '../../core/rng';
-import { M } from '../materials';
+import { canvasTexture, M } from '../materials';
+import { damp } from '../../core/math';
 import { buildInstrument, buildSpeakerStack } from '../instrumentModels';
 import {
   beamGeometry,
@@ -36,6 +37,7 @@ uniform vec2 uHalf;
 uniform vec3 uCols[4];
 uniform vec4 uSpots[8];
 uniform vec3 uSpotCols[8];
+uniform float uStep;
 varying vec3 vWorld;
 
 void main() {
@@ -57,6 +59,35 @@ void main() {
   if (ci == 1) lc = uCols[1]; else if (ci == 2) lc = uCols[2]; else if (ci == 3) lc = uCols[3];
   col += lc * line * (0.25 + chase * 0.45 + beat * 0.8) * (0.4 + uEnergy * 0.8);
 
+  // centre B-stage: a giant turntable. Vinyl grooves, a label that thumps, and a ring of
+  // sixteen ticks that walks with the sequencer so the floor keeps time with your band.
+  float r = length(w);
+  float ang = atan(w.y, w.x + 1e-4);
+  float disc = smoothstep(6.3, 6.1, r);
+  float grooves = 0.5 + 0.5 * sin(r * 38.0);
+  vec3 vinyl = vec3(0.006, 0.006, 0.009) + vec3(0.018) * grooves * smoothstep(1.9, 2.1, r);
+  float sheen = pow(max(0.0, sin(ang * 2.0 - uTime * 0.8)), 8.0) * smoothstep(2.0, 5.5, r) * 0.06;
+  vinyl += vec3(sheen);
+  float label = smoothstep(1.8, 1.7, r);
+  vinyl = mix(vinyl, uCols[0] * (0.35 + beat * 0.9), label);
+  vinyl += vec3(1.0) * smoothstep(0.16, 0.1, r) * 0.6;
+  col = mix(col, vinyl, disc * inside);
+  col += uCols[1] * smoothstep(0.14, 0.0, abs(r - 6.2)) * (0.5 + beat * 0.8);
+  float sa = fract(-ang / 6.28318 + 0.25);
+  float tick = floor(sa * 16.0);
+  float tf = fract(sa * 16.0);
+  float tickShape = smoothstep(0.32, 0.22, abs(tf - 0.5)) * smoothstep(0.35, 0.0, abs(r - 7.0) - 0.4);
+  float current = 1.0 - step(0.5, abs(tick - uStep));
+  float quarter = 1.0 - step(0.5, mod(tick, 4.0));
+  col += mix(vec3(0.05), uCols[2], quarter * 0.6) * tickShape * (0.35 + quarter * 0.4);
+  col += vec3(1.0, 0.95, 0.85) * tickShape * current * 2.2;
+
+  // spike tape: little gaffer X marks where the crew blocked the show
+  vec2 sp = mod(w + vec2(3.0, 5.0), vec2(17.0, 13.0)) - vec2(8.5, 6.5);
+  float xm = min(abs(sp.x - sp.y), abs(sp.x + sp.y));
+  float tape = smoothstep(0.1, 0.05, xm) * step(max(abs(sp.x), abs(sp.y)), 0.45) * step(8.0, r);
+  col = mix(col, vec3(0.5, 0.42, 0.12), tape * 0.8);
+
   // moving-head light pools
   for (int i = 0; i < 8; i++) {
     float d = length(w - uSpots[i].xy);
@@ -67,8 +98,9 @@ void main() {
     float gobo = 0.55 + 0.45 * smoothstep(0.2, 0.7, sin(ga * 5.0) * 0.5 + 0.5 - d / uSpots[i].z * 0.4);
     col += uSpotCols[i] * pool * gobo * uSpots[i].w * 0.9;
   }
-  // drop: the whole deck strobes in stripes
-  col += lc * uDrop * step(0.5, fract(w.x * 0.08 + uTime * 3.0)) * 0.25;
+  // drop: thin chevrons race across the deck toward the crowd
+  float chev = fract((abs(w.x) * 0.5 + w.y) * 0.09 - uTime * 1.6);
+  col += lc * uDrop * smoothstep(0.1, 0.0, abs(chev - 0.5)) * 0.35;
 
   float pd = length(w - uPlayer);
   col += vec3(1.0, 0.8, 0.6) * 0.14 * smoothstep(7.0, 0.0, pd);
@@ -91,6 +123,9 @@ uniform float uBands[16];
 uniform float uDrop;
 uniform vec3 uA;
 uniform vec3 uB;
+uniform sampler2D uText;
+uniform float uTextAmt;
+uniform vec3 uTextCol;
 varying vec2 vUv;
 void main() {
   vec2 uv = vUv;
@@ -113,6 +148,9 @@ void main() {
   vec3 col = mix(uA, uB, c.x) * bar * 1.6;
   col += mix(uB, uA, k) * k * 0.25 * (0.5 + beat);
   col += vec3(1.0) * uDrop * step(0.5, fract(uTime * 8.0)) * 0.35;
+  // pixel lettering, sampled at the LED cell centre so it stays chunky
+  float tx = texture2D(uText, c).r * uTextAmt;
+  col = mix(col * (1.0 - uTextAmt * 0.7), uTextCol * (1.3 + beat * 1.2), tx);
   col *= px;
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -137,6 +175,11 @@ export class Mainstage implements Venue {
   readonly obstacles: { x: number; z: number; r: number }[] = [
     { x: -16, z: -2, r: 1.5 },
     { x: 16, z: -2, r: 1.5 },
+    // road cases left on the deck by the crew
+    { x: -9, z: -13, r: 1.7 },
+    { x: 10, z: 12, r: 1.7 },
+    { x: -23, z: 12, r: 1.7 },
+    { x: 23, z: -13, r: 1.7 },
   ];
   private readonly floorMat: THREE.ShaderMaterial;
   private readonly ledMat: THREE.ShaderMaterial;
@@ -152,6 +195,10 @@ export class Mainstage implements Venue {
   private readonly tmp = new THREE.Vector3();
   private readonly bands: number[] = new Array(16).fill(0);
   private pyroT = 0;
+  private finaleOn = false;
+  private dropOn = false;
+  private readonly aims = Array.from({ length: 8 }, () => ({ x: 0, z: 0, tx: 0, tz: 0 }));
+  private readonly texts = new Map<string, THREE.CanvasTexture>();
   private barrierMat!: THREE.MeshBasicMaterial;
   private readonly pyro: THREE.Mesh[] = [];
 
@@ -172,6 +219,7 @@ export class Mainstage implements Venue {
         uCols: { value: acc },
         uSpots: { value: this.spots },
         uSpotCols: { value: this.spotCols },
+        uStep: { value: 0 },
         ...this.rip.uniforms(),
       },
     });
@@ -192,6 +240,9 @@ export class Mainstage implements Venue {
         uDrop: { value: 0 },
         uA: { value: new THREE.Color(0xff2dd4) },
         uB: { value: new THREE.Color(0x2ee6ff) },
+        uText: { value: null },
+        uTextAmt: { value: 0 },
+        uTextCol: { value: new THREE.Color(0xffffff) },
       },
       vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: LED_FRAG,
@@ -303,7 +354,7 @@ export class Mainstage implements Venue {
       arm.rotateZ(0.35);
       arm.translate(0.32, 2.05, 0);
       const parts = [body, head, arm].map((g) => {
-        const ng = g.toNonIndexed();
+        const ng = g.index ? g.toNonIndexed() : g;
         for (const k of Object.keys(ng.attributes)) if (k !== 'position' && k !== 'normal') ng.deleteAttribute(k);
         return ng;
       });
@@ -381,8 +432,28 @@ export class Mainstage implements Venue {
       this.group.add(grille);
     }
 
-    // obstacles: touring PA stacks on the deck
-    for (const o of this.obstacles) {
+    // obstacles: touring PA stacks and flight cases on the deck
+    const caseLabel = canvasTexture(512, 256, (g, w, h) => {
+      g.fillStyle = '#16171d';
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = '#e8e2d0';
+      g.font = '64px Bungee, Impact, sans-serif';
+      g.textAlign = 'center';
+      g.fillText('ENCORE', w / 2, 96);
+      g.font = '600 30px "JetBrains Mono", monospace';
+      g.fillStyle = '#ff9a2e';
+      g.fillText('WORLD TOUR · STAGE L', w / 2, 150);
+      g.fillStyle = '#ff3b5c';
+      g.font = '40px Bungee, Impact, sans-serif';
+      g.fillText('▲ FRAGILE ▲', w / 2, 215);
+    });
+    this.obstacles.slice(2).forEach((o, i) => {
+      const c = roadCase(caseLabel, this.palette.accents[i % 4]!);
+      c.position.set(o.x, 0, o.z);
+      c.rotation.y = (i % 2 ? 0.35 : -0.25) + i * 0.4;
+      this.group.add(c);
+    });
+    for (const o of this.obstacles.slice(0, 2)) {
       const stack = buildSpeakerStack(3, o.x < 0 ? 0xff2dd4 : 0x2ee6ff);
       stack.position.set(o.x, 0, o.z);
       stack.scale.setScalar(0.95);
@@ -423,7 +494,50 @@ export class Mainstage implements Venue {
   }
 
   onStep(step: number, bar: number): void {
+    this.floorMat.uniforms.uStep!.value = step;
     if (step === 0 && bar % 8 === 0) this.pyroT = 0.6;
+    // moving heads snap to a new look on every bar, every beat when the room goes off
+    const hot = this.dropOn || this.finaleOn;
+    if (step === 0 || (hot && step % 4 === 0)) {
+      this.aims.forEach((a, i) => {
+        const k = Math.sin((bar * 16 + step) * 12.9898 + i * 78.233) * 43758.5453;
+        const r = k - Math.floor(k);
+        const r2 = (r * 7.31) % 1;
+        a.tx = (r - 0.5) * 1.2;
+        a.tz = (r2 - 0.5) * 1.1;
+      });
+      if (this.finaleOn && step % 4 === 0) this.pyroT = 0.3;
+    }
+  }
+
+  finale(): void {
+    this.finaleOn = true;
+  }
+
+  /** Chunky pixel lettering for the LED wall. */
+  private text(msg: string): THREE.CanvasTexture {
+    let t = this.texts.get(msg);
+    if (!t) {
+      t = canvasTexture(
+        320,
+        96,
+        (g, w, h) => {
+          g.fillStyle = '#000';
+          g.fillRect(0, 0, w, h);
+          g.fillStyle = '#fff';
+          g.font = '58px Bungee, Impact, sans-serif';
+          g.textAlign = 'center';
+          g.textBaseline = 'middle';
+          g.fillText(msg, w / 2, h / 2 + 4);
+        },
+        false,
+      );
+      t.minFilter = THREE.NearestFilter;
+      t.magFilter = THREE.NearestFilter;
+      t.generateMipmaps = false;
+      this.texts.set(msg, t);
+    }
+    return t;
   }
 
   setBar(b: number): void {
@@ -444,26 +558,45 @@ export class Mainstage implements Venue {
     for (let i = 0; i < 16; i++) this.bands[i] = (this.bands[i]! * 0.6 + (f.spectrum[i] ?? 0) * 0.4);
     const beat = Math.pow(1 - f.beatPhase, 3);
 
+    this.dropOn = f.drop;
+    const hot = f.drop || this.finaleOn;
+    const lu = this.ledMat.uniforms;
+    if (this.finaleOn || f.drop) {
+      lu.uText!.value = this.text(this.finaleOn ? 'ENCORE!' : 'DROP!');
+      lu.uTextAmt!.value = damp(lu.uTextAmt!.value as number, 1, 8, f.dt);
+      (lu.uTextCol!.value as THREE.Color).setHex(this.finaleOn ? 0xffd36b : 0xffffff);
+    } else {
+      lu.uTextAmt!.value = damp(lu.uTextAmt!.value as number, 0, 5, f.dt);
+    }
+    if (this.finaleOn) {
+      u.uDrop!.value = 1;
+      this.ledMat.uniforms.uDrop!.value = 1;
+    }
+
     this.heads.forEach((hd, i) => {
-      const sp = f.drop ? 2.2 : 0.8;
-      const t = f.time * sp + hd.phase;
-      hd.pivot.rotation.set(Math.sin(t) * 0.6, 0, Math.cos(t * 0.7) * 0.55);
+      const a = this.aims[i]!;
+      const snap = hot ? 14 : 6;
+      a.x = damp(a.x, a.tx, snap, f.dt);
+      a.z = damp(a.z, a.tz, snap, f.dt);
+      const sway = f.time * 0.9 + hd.phase;
+      hd.pivot.rotation.set(a.x + Math.sin(sway) * 0.05, 0, a.z + Math.cos(sway * 0.8) * 0.05);
       hd.mat.uniforms.uTime!.value = f.time;
-      hd.mat.uniforms.uOpacity!.value = 0.1 + f.energy * 0.15 + beat * 0.08 + (f.drop ? 0.15 : 0);
+      hd.mat.uniforms.uOpacity!.value = 0.1 + f.energy * 0.15 + beat * 0.08 + (hot ? 0.15 : 0);
       this.tmp.set(0, -1, 0).applyEuler(hd.pivot.rotation);
       const k = hd.pivot.position.y / Math.max(0.2, -this.tmp.y);
       this.spots[i]!.set(hd.pivot.position.x + this.tmp.x * k, hd.pivot.position.z + this.tmp.z * k, 3.5, 0.08 + f.energy * 0.1);
       this.spotCols[i]!.copy(hd.mat.uniforms.uColor!.value as THREE.Color);
     });
-    this.lasers.forEach((l) => {
-      const t = f.time * (f.drop ? 1.8 : 0.5) + l.phase;
+    this.lasers.forEach((l, i) => {
+      const t = f.time * (hot ? 1.8 : 0.5) + l.phase;
       l.pivot.rotation.set(0.9 + Math.sin(t) * 0.35, 0, Math.sin(t * 1.3) * 0.7);
       l.mat.uniforms.uTime!.value = f.time;
-      l.mat.uniforms.uOpacity!.value = (f.energy > 0.5 || f.drop ? 0.8 : 0.25) * (0.6 + beat * 0.4);
+      l.mat.uniforms.uOpacity!.value = (f.energy > 0.5 || hot ? 0.8 : 0.25) * (0.6 + beat * 0.4);
+      if (this.finaleOn) (l.mat.uniforms.uColor!.value as THREE.Color).setHex(i % 3 === 0 ? 0xffffff : 0xffd36b);
     });
 
     // crowd bounces on the beat; bigger when the fight is intense
-    const jump = beat * (0.25 + f.energy * 0.45 + (f.drop ? 0.4 : 0));
+    const jump = beat * (0.25 + f.energy * 0.45 + (hot ? 0.4 : 0) + (this.finaleOn ? 0.5 : 0));
     for (let i = 0; i < this.crowdSeeds.length; i++) {
       const c = this.crowdSeeds[i]!;
       const y = c.y + jump * (0.6 + c.s * 0.8) * (Math.sin(i) > -0.3 ? 1 : 0.3);
@@ -472,7 +605,9 @@ export class Mainstage implements Venue {
     }
     this.crowd.instanceMatrix.needsUpdate = true;
 
-    this.barrierMat.color.setHex(this.palette.accents[Math.floor(f.time * 0.5) % 4]!).multiplyScalar(1 + beat * 1.5);
+    this.barrierMat.color
+      .setHex(this.finaleOn ? 0xffd36b : this.palette.accents[Math.floor(f.time * 0.5) % 4]!)
+      .multiplyScalar(1 + beat * 1.5);
     this.pyroT = Math.max(this.pyroT - f.dt, f.drop && beat > 0.9 ? 0.35 : 0);
     const fire = this.pyroT > 0 ? Math.min(1, this.pyroT * 3) : 0;
     for (const p of this.pyro) {
@@ -506,5 +641,59 @@ export class Mainstage implements Venue {
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
+    for (const t of this.texts.values()) t.dispose();
   }
+}
+
+/** A touring flight case: laminate box, aluminium extrusions, ball corners, a stencilled lid. */
+function roadCase(label: THREE.Texture, stripe: number): THREE.Group {
+  const g = new THREE.Group();
+  const W = 3.2;
+  const H = 1.5;
+  const D = 2;
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(W, H, D),
+    new THREE.MeshStandardMaterial({ color: 0x1a1c24, roughness: 0.42, metalness: 0.1 }),
+  );
+  body.position.y = H / 2;
+  g.add(body);
+  const lid = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.3, D - 0.3), new THREE.MeshStandardMaterial({ map: label, roughness: 0.6 }));
+  lid.rotation.x = -Math.PI / 2;
+  lid.position.y = H + 0.01;
+  g.add(lid);
+  const alu = M.chrome();
+  const e = 0.07;
+  for (const y of [0.04, H / 2, H - 0.04]) {
+    for (const z of [-D / 2, D / 2]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(W + e, e, e), alu);
+      bar.position.set(0, y, z);
+      g.add(bar);
+    }
+    for (const x of [-W / 2, W / 2]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(e, e, D + e), alu);
+      bar.position.set(x, y, 0);
+      g.add(bar);
+    }
+  }
+  for (const x of [-W / 2, W / 2])
+    for (const z of [-D / 2, D / 2]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(e, H, e), alu);
+      post.position.set(x, H / 2, z);
+      g.add(post);
+      for (const y of [0.06, H - 0.06]) {
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), alu);
+        ball.position.set(x, y, z);
+        g.add(ball);
+      }
+    }
+  // latches and a strip of glow tape so it reads in the dark
+  for (const x of [-0.8, 0.8]) {
+    const latch = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.06), alu);
+    latch.position.set(x, H - 0.28, D / 2 + 0.03);
+    g.add(latch);
+  }
+  const tape = new THREE.Mesh(new THREE.BoxGeometry(W + 0.02, 0.1, D + 0.02), M.glow(stripe, 2.2));
+  tape.position.y = 0.42;
+  g.add(tape);
+  return g;
 }

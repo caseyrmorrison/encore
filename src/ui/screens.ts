@@ -4,7 +4,7 @@ import { GROOVES, GROOVE_IDS } from '../seq/grooves';
 import { INSTRUMENTS, INSTRUMENT_IDS, RARITY_COLOR, type InstrumentId } from '../seq/instruments';
 import { SETLISTS, type SetlistId } from '../seq/setlists';
 import type { IconFactory } from '../render/icons';
-import { clear, h, show } from './dom';
+import { clear, h, isSafeImageSrc, show } from './dom';
 
 function overlay(cls: string, label: string): HTMLElement {
   return h('div', { class: `overlay ${cls} hidden`, role: 'dialog', aria: { label } });
@@ -112,24 +112,104 @@ export class TitleScreen {
 
 /* ─────────────────────────── pause ─────────────────────────── */
 
+export interface PauseInfo {
+  venue: string;
+  time: number;
+  level: number;
+  kills: number;
+  bestHit: number;
+  hp: number;
+  maxHp: number;
+  grooves: { genre: string; color: string }[];
+  tracks: { short: string; css: string; notes: boolean[] }[];
+  pedals: string[];
+  seedCode: string;
+  daily: boolean;
+}
+
+/** A small read-only copy of the drum machine (results + pause). */
+function machineView(tracks: PauseInfo['tracks']): HTMLElement {
+  const machine = h('div', { class: 'results-machine' });
+  for (const t of tracks) {
+    const row = h('div', { class: 'mini-row' }, [h('span', { class: 'mini-label', text: t.short })]);
+    row.style.setProperty('--c', t.css);
+    t.notes.forEach((on, i) => row.append(h('i', { class: `mini-cell${on ? ' on' : ''}${i % 4 === 0 ? ' beat' : ''}` })));
+    machine.append(row);
+  }
+  return machine;
+}
+
+function keycaps(): HTMLElement {
+  const k = (keys: string[], what: string): HTMLElement =>
+    h('div', { class: 'keyhint' }, [...keys.map((c) => h('kbd', { text: c })), h('span', { text: what })]);
+  return h('div', { class: 'keyhints' }, [
+    k(['W', 'A', 'S', 'D'], 'move'),
+    k(['SPACE'], 'dash — on the beat for PERFECT'),
+    k(['Q'], 'DROP when hype is full'),
+    k(['M'], 'mute'),
+  ]);
+}
+
 export class PauseScreen {
   readonly el: HTMLElement;
+  private readonly side: HTMLElement;
   constructor(root: HTMLElement, a: { resume(): void; settings(): void; howto(): void; quit(): void }) {
     this.el = overlay('pause', 'Paused');
+    this.side = h('div', { class: 'pause-side' });
     this.el.append(
-      h('div', { class: 'panel narrow' }, [
-        h('div', { class: 'panel-title big', text: 'PAUSED' }),
-        h('div', { class: 'panel-sub', text: 'The band is on a smoke break.' }),
-        h('div', { class: 'stack' }, [
-          button('RESUME', 'wide primary', a.resume, 'ESC'),
-          button('HOW TO PLAY', 'wide', a.howto),
-          button('SETTINGS', 'wide', a.settings),
-          button('QUIT RUN', 'wide danger', a.quit),
+      h('div', { class: 'panel pause-panel' }, [
+        h('div', { class: 'pause-cols' }, [
+          h('div', { class: 'pause-main' }, [
+            h('div', { class: 'panel-title big', text: 'PAUSED' }),
+            h('div', { class: 'panel-sub', text: 'The band is on a smoke break.' }),
+            h('div', { class: 'stack' }, [
+              button('RESUME', 'wide primary', a.resume, 'ESC'),
+              button('HOW TO PLAY', 'wide', a.howto),
+              button('SETTINGS', 'wide', a.settings),
+              button('QUIT RUN', 'wide danger', a.quit),
+            ]),
+          ]),
+          this.side,
         ]),
+        keycaps(),
       ]),
     );
     root.append(this.el);
   }
+
+  open(p: PauseInfo): void {
+    clear(this.side);
+    const stat = (label: string, value: string): HTMLElement =>
+      h('div', { class: 'pstat' }, [h('div', { class: 'pstat-v', text: value }), h('div', { class: 'pstat-l', text: label })]);
+    this.side.append(
+      h('div', { class: 'pause-venue' }, [
+        h('span', { text: p.venue }),
+        h('span', { class: 'pause-seed', text: p.daily ? 'DAILY SETLIST' : `SEED ${p.seedCode}` }),
+      ]),
+      h('div', { class: 'pstats' }, [
+        stat('level', String(p.level)),
+        stat('silenced', formatInt(p.kills)),
+        stat('biggest hit', formatInt(p.bestHit)),
+        stat('set time', formatTime(p.time)),
+        stat('health', `${Math.max(0, Math.round(p.hp))}/${p.maxHp}`),
+      ]),
+      machineView(p.tracks),
+      p.grooves.length
+        ? h(
+            'div',
+            { class: 'rgrooves' },
+            p.grooves.map((g) => {
+              const c = h('span', { class: 'chip', text: g.genre });
+              c.style.setProperty('--g', g.color);
+              return c;
+            }),
+          )
+        : h('div', { class: 'pause-empty', text: 'No grooves yet — line your notes up into a pattern.' }),
+    );
+    if (p.pedals.length) this.side.append(h('div', { class: 'pause-pedals', text: p.pedals.join(' · ') }));
+    show(this.el, true);
+  }
+
   setVisible(on: boolean): void {
     show(this.el, on);
   }
@@ -147,7 +227,7 @@ export class SettingsScreen {
     this.el = overlay('settings', 'Settings');
     this.body = h('div', { class: 'settings-body' });
     this.el.append(
-      h('div', { class: 'panel narrow' }, [
+      h('div', { class: 'panel narrow settings-panel' }, [
         h('div', { class: 'panel-title big', text: 'SETTINGS' }),
         this.body,
         button('DONE', 'wide primary', a.close, 'ESC'),
@@ -185,7 +265,7 @@ export class SettingsScreen {
         sync();
         this.a.change({ ...cur });
       });
-      return h('div', { class: 'set-row' }, [h('span', { text: label, title: help }), b, h('span', { class: 'set-help', text: help })]);
+      return h('div', { class: 'set-row toggle-row' }, [h('span', { text: label, title: help }), b, h('span', { class: 'set-help', text: help })]);
     };
     const quality = h('div', { class: 'seg' });
     for (const q of ['low', 'medium', 'high'] as const) {
@@ -198,13 +278,17 @@ export class SettingsScreen {
       });
       quality.append(b);
     }
+    const section = (t: string): HTMLElement => h('div', { class: 'set-section', text: t });
     this.body.append(
+      section('SOUND'),
       slider('Master volume', 'master'),
       slider('Music & instruments', 'music'),
       slider('Effects', 'sfx'),
+      section('FEEL'),
       slider('Screen shake', 'shake'),
       toggle('Auto-aim', 'autoAim', 'Weapons target the nearest enemy instead of your cursor'),
       toggle('Strobes & flashes', 'flashes', 'Turn off to reduce flashing lights'),
+      section('PICTURE'),
       h('div', { class: 'set-row' }, [h('span', { text: 'Graphics' }), quality]),
     );
     show(this.el, true);
@@ -287,6 +371,8 @@ export interface ResultStats {
   loop: number;
   newBestKills: boolean;
   newBestHit: boolean;
+  /** rendered gold record, shown either side of the title on a win */
+  trophy?: string;
 }
 
 export class ResultsScreen {
@@ -296,6 +382,8 @@ export class ResultsScreen {
   private readonly sub: HTMLElement;
   private readonly shareBtn: HTMLButtonElement;
   private readonly hero: HTMLElement;
+  private readonly panel: HTMLElement;
+  private readonly trophies: HTMLImageElement[];
   private again!: HTMLButtonElement;
   private posterBtn!: HTMLButtonElement;
   private shareText = '';
@@ -312,9 +400,10 @@ export class ResultsScreen {
         () => (this.shareBtn.firstChild!.textContent = 'COPY FAILED'),
       );
     });
+    this.trophies = [h('img', { class: 'trophy', alt: '' }), h('img', { class: 'trophy r', alt: '' })];
     this.el.append(
-      h('div', { class: 'panel results-panel' }, [
-        this.title,
+      (this.panel = h('div', { class: 'panel results-panel' }, [
+        h('div', { class: 'results-head' }, [this.trophies[0]!, this.title, this.trophies[1]!]),
         this.sub,
         h('div', { class: 'rhero' }, [this.hero, h('div', { class: 'rhero-l', text: 'FANS EARNED' })]),
         this.body,
@@ -328,7 +417,7 @@ export class ResultsScreen {
           this.shareBtn,
           button('MENU', 'ghost', a.menu),
         ]),
-      ]),
+      ])),
     );
     root.append(this.el);
   }
@@ -337,6 +426,11 @@ export class ResultsScreen {
     this.title.textContent = r.won ? (r.loop > 0 ? `ENCORE ×${r.loop + 1}` : 'ENCORE!') : "SHOW'S OVER";
     this.again.firstChild!.textContent = r.won ? 'ENCORE ▸ KEEP YOUR BUILD' : 'PLAY AGAIN';
     this.title.classList.toggle('won', r.won);
+    this.panel.classList.toggle('won', r.won);
+    for (const t of this.trophies) {
+      if (r.trophy && isSafeImageSrc(r.trophy)) t.src = r.trophy;
+      show(t, !!r.trophy);
+    }
     this.sub.textContent = r.won
       ? 'The crowd will not stop screaming.'
       : `The Hush took ${r.venueName}. The crowd wants more.`;
@@ -380,14 +474,7 @@ export class ResultsScreen {
       );
     }
     // the machine you ended with
-    const machine = h('div', { class: 'results-machine' });
-    for (const t of r.tracks) {
-      const row = h('div', { class: 'mini-row' }, [h('span', { class: 'mini-label', text: t.short })]);
-      row.style.setProperty('--c', t.css);
-      t.notes.forEach((on, i) => row.append(h('i', { class: `mini-cell${on ? ' on' : ''}${i % 4 === 0 ? ' beat' : ''}` })));
-      machine.append(row);
-    }
-    this.body.append(h('div', { class: 'rgrooves' }, [machine]));
+    this.body.append(h('div', { class: 'rgrooves' }, [machineView(r.tracks)]));
     this.shareText = [
       `ENCORE ${r.daily ? '· Daily Setlist ' : ''}· seed ${r.seedCode}`,
       `${r.won ? '🏆 headlined everything' : `💀 fell at ${r.venueName}`} · ${formatInt(r.kills)} silenced · biggest hit ${formatInt(r.bestHit)}`,
@@ -488,7 +575,7 @@ export class MerchScreen {
       h('div', { class: 'loud-title', text: 'CAREER' }),
       h('div', { class: 'career', text: `${save.runs} shows · ${save.wins} headlined · best ${formatInt(save.bestKills)} silenced · biggest hit ${formatInt(save.bestHit)}` }),
     ]);
-    this.body.append(grid, loud, gro, stats);
+    this.body.append(grid, h('aside', { class: 'merch-side' }, [loud, gro, stats]));
     show(this.el, true);
   }
 

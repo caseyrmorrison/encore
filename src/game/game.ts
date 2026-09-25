@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AudioEngine } from '../audio/engine';
 import { Transport, type StepEvent } from '../audio/transport';
 import * as V from '../audio/voices';
-import { clamp, damp, formatInt } from '../core/math';
+import { clamp, damp, easeInOutSine, formatInt, lerp } from '../core/math';
 import { Input } from '../core/input';
 import { prof } from '../core/prof';
 import { dailyKey, dailySeed, parseSeedCode, seedToCode } from '../core/rng';
@@ -19,7 +19,7 @@ import { clampToBounds, pushOutOfObstacles, type Venue } from '../render/venues/
 import { Basement } from '../render/venues/basement';
 import { Cathedral } from '../render/venues/cathedral';
 import { Mainstage } from '../render/venues/mainstage';
-import { cardRarity, drawGoldOffers, drawOffers, PEDALS, type Card, type DraftContext } from '../seq/cards';
+import { cardRarity, drawGoldOffers, drawOffers, PEDALS, type Card, type DraftContext, type PedalId } from '../seq/cards';
 import { GROOVES, type GrooveId } from '../seq/grooves';
 import { INSTRUMENTS, type InstrumentId } from '../seq/instruments';
 import { SETLISTS, SETLIST_IDS, type SetlistId } from '../seq/setlists';
@@ -116,6 +116,8 @@ export class Game {
   private director: Director | null = null;
   private boss: Boss | null = null;
   private bossDownT = 0;
+  /** seconds since the final headliner fell (-1 = no finale): drives the victory lap camera */
+  private finaleT = -1;
   private readonly player: Player = {
     x: 0,
     z: 0,
@@ -410,6 +412,8 @@ export class Game {
     this.director = new Director(index, run.loop, run.spawnRng);
     this.boss = null;
     this.bossDownT = 0;
+    this.finaleT = -1;
+    this.hud.setCinematic(false);
     this.player.x = 0;
     this.player.z = 4;
     this.player.vx = this.player.vz = 0;
@@ -540,6 +544,7 @@ export class Game {
       loop: run.loop,
       newBestKills,
       newBestHit,
+      trophy: won ? this.icons.goldRecord() : undefined,
     });
     this.resultsWon = won;
     if (won) {
@@ -595,7 +600,23 @@ export class Game {
     if (this.state !== 'playing') return;
     this.prevState = this.state;
     this.state = 'paused';
-    this.pauseUi.setVisible(true);
+    const run = this.run!;
+    this.pauseUi.open({
+      venue: VENUE_NAMES[run.venueIndex] ?? 'THE VENUE',
+      time: run.setTime,
+      level: run.level,
+      kills: run.kills,
+      bestHit: run.bestHit,
+      hp: run.hp,
+      maxHp: run.stats.maxHp,
+      grooves: [...run.grooves.active].map((g) => ({ genre: GROOVES[g].genre, color: GROOVES[g].color })),
+      tracks: run.pattern.tracks.map((t) => ({ short: INSTRUMENTS[t.inst].short, css: INSTRUMENTS[t.inst].css, notes: [...t.notes] })),
+      pedals: (Object.entries(run.pedals) as [PedalId, number][])
+        .filter(([, n]) => n > 0)
+        .map(([id, n]) => `${PEDALS[id].name}${n > 1 ? ` ×${n}` : ''}`),
+      seedCode: seedToCode(run.seed),
+      daily: run.mode === 'daily',
+    });
     this.muffleTarget = 0.75;
   }
 
@@ -707,10 +728,14 @@ export class Game {
         break;
       default:
         if (this.autopilot && this.state === 'backstage') this.leaveBackstage();
-        // draft / paused / backstage / results: the band plays on, the world holds its breath
+        // draft / paused / backstage / results: the band plays on, the world holds its breath —
+        // except after a headlining win, when the fireworks keep going behind the results
         this.music.drain(audible, null);
         this.transport.drain(audible, (ev) => this.venue.onStep(ev.step, ev.bar));
-        this.updateVisuals(0, rawDt, beatPhase);
+        if (this.state === 'results' && this.finaleT >= 0) {
+          this.runScheduled(rawDt);
+          this.updateVisuals(rawDt, rawDt, beatPhase);
+        } else this.updateVisuals(0, rawDt, beatPhase);
         this.editor?.tick(this.currentStep);
         if (this.state === 'draft' || this.state === 'backstage') this.processStamps(rawDt);
         if (this.state === 'draft') this.draftKeys();
@@ -890,14 +915,7 @@ export class Game {
     prof.end('pickups');
 
     // scheduled weapon follow-ups
-    for (let i = this.scheduled.length - 1; i >= 0; i--) {
-      const s = this.scheduled[i]!;
-      s.t -= dt;
-      if (s.t <= 0) {
-        this.scheduled.splice(i, 1);
-        s.fn();
-      }
-    }
+    this.runScheduled(dt);
 
     // streaks
     this.streakT -= dt;
@@ -954,7 +972,7 @@ export class Game {
       this.dropState,
     );
     prof.end('hud');
-    if (this.rig.toScreen(p.x, 1, p.z, this.scr)) this.hud.setBottomFade(this.scr.y > window.innerHeight * 0.7);
+    if (this.rig.toScreen(p.x, 1, p.z, this.scr)) this.hud.fadeForPlayer(this.scr.y);
     this.processAnnouncements(rawDt);
   }
 
@@ -1152,6 +1170,7 @@ export class Game {
     this.buildEnd = riserEnd;
     this.dropState = 'queued';
     this.hud.clearToasts();
+    this.hud.dismissStamps();
   }
 
   private onStepEvent(ev: StepEvent): void {
@@ -1676,8 +1695,22 @@ export class Game {
     this.bossDownT = 4;
     this.hud.boss(null);
     const color = new THREE.Color(boss.color);
-    // everything on the field dies with the headliner
-    for (const e of this.enemies.list) if (e.alive && !e.scripted) this.kill(e, { color, inst: null });
+    // everything on the field dies with the headliner; after the last one it goes out as a
+    // ripple from where the Hush stood, so the room visibly empties in a wave of pops
+    const final = run.venueIndex >= 2;
+    for (const e of this.enemies.list) {
+      if (!e.alive) continue;
+      // the headliner's own adds lose their puppeteer and pop like everyone else
+      e.scripted = false;
+      if (!final) {
+        this.kill(e, { color, inst: null });
+        continue;
+      }
+      const id = e.id;
+      this.schedule(0.2 + Math.hypot(e.x - bx, e.z - bz) * 0.03, () => {
+        if (e.alive && e.id === id) this.kill(e, { color, inst: null });
+      });
+    }
     this.pickups.vacuum(['xp', 'tip', 'record', 'heart']);
     this.hitStop = 0.35;
     this.rig.addTrauma(1);
@@ -1709,27 +1742,13 @@ export class Game {
 
   /** The Hush falls: fireworks, a chanting crowd, and a stage lit gold. */
   private finale(): void {
-    const p = this.player;
     this.bossDownT = 9;
+    this.finaleT = 0;
+    this.venue.finale?.();
     this.hud.announce('ENCORE!', 'the silence is broken', '#ffd36b', 5, true);
-    const acc = [0xffd36b, 0xff2dd4, 0x2ee6ff, 0xffffff, 0x8cff5a];
-    for (let k = 0; k < 26; k++) {
-      this.schedule(0.4 + k * 0.28, () => {
-        const x = p.x + (Math.random() - 0.5) * 40;
-        const z = p.z - 6 - Math.random() * 14;
-        const c = acc[k % acc.length]!;
-        // rocket
-        for (let t = 0; t < 8; t++)
-          this.glow.emit({ x, y: 1 + t * 1.6, z, vy: 2, life: 0.35 + t * 0.04, size: 0.4, sizeEnd: 0, color: 0xfff1d0, shape: Shape.Dot });
-        // burst
-        this.schedule(0.32, () => {
-          this.glow.burst(x, 14 + Math.random() * 4, z, 90, c, 18, { vy: 6, life: 1.6, size: 0.45, shape: Shape.Spark, gravity: 6, drag: 1.6 });
-          this.glow.emit({ x, y: 15, z, life: 0.4, size: 12, sizeEnd: 16, color: c, shape: Shape.Ring, alpha: 0.6 });
-          V.kick(this.audio, this.audio.now, 0.5, true);
-          V.crash(this.audio, this.audio.now + 0.02, 0.35);
-        });
-      });
-    }
+    for (let k = 0; k < 30; k++) this.schedule(1.2 + k * 0.26, () => this.firework(k));
+    // confetti cannons along the stage lip, on the beat
+    for (let k = 0; k < 6; k++) this.schedule(0.9 + k * this.transport.stepDur * 8, () => this.stageCannons());
     // "EN-CORE! EN-CORE!" on the beat
     const beat = this.transport.stepDur * 4;
     const t0 = this.transport.nextDownbeat(this.audio.now);
@@ -1743,6 +1762,87 @@ export class Game {
       V.crowdCheer(this.audio, t, 0.5, 1.2);
     }
     V.crowdCheer(this.audio, this.audio.now, 1.6, 6);
+  }
+
+  /** One rocket and burst somewhere over the deck the victory camera is looking at. */
+  private firework(k: number): void {
+    const acc = [0xffd36b, 0xff2dd4, 0x2ee6ff, 0xffffff, 0x8cff5a];
+    const b = this.venue.bounds;
+    const hx = b.kind === 'rect' ? b.hx : b.r;
+    const hz = b.kind === 'rect' ? b.hz : b.r;
+    const x = (Math.random() - 0.5) * hx * 1.6;
+    const z = -hz * 0.9 + Math.random() * hz * 1.1;
+    const c = acc[k % acc.length]!;
+    const top = 11 + Math.random() * 6;
+    for (let t = 0; t < 10; t++)
+      this.glow.emit({ x, y: 1 + (t / 10) * top, z, vy: 2, life: 0.3 + t * 0.035, size: 0.45, sizeEnd: 0, color: 0xfff1d0, shape: Shape.Dot });
+    this.schedule(0.3, () => {
+      this.glow.burst(x, top, z, 110, c, 20, { vy: 5, life: 1.8, size: 0.5, shape: Shape.Spark, gravity: 5, drag: 1.5 });
+      this.glow.burst(x, top, z, 30, 0xffffff, 9, { life: 0.5, size: 0.35, shape: Shape.Dot, drag: 3 });
+      this.glow.emit({ x, y: top, z, life: 0.45, size: 13, sizeEnd: 18, color: c, shape: Shape.Ring, alpha: 0.6 });
+      this.ground.add(GroundKind.Disc, x, z, 1, 8, 0.5, c, { alpha: 0.35 });
+      V.kick(this.audio, this.audio.now, 0.45, true);
+      V.crash(this.audio, this.audio.now + 0.02, 0.3);
+    });
+  }
+
+  /** Paper cannons fire from the front of the stage toward the crowd. */
+  private stageCannons(): void {
+    const b = this.venue.bounds;
+    const hx = b.kind === 'rect' ? b.hx : b.r;
+    const hz = b.kind === 'rect' ? b.hz : b.r;
+    const acc = [0xffd36b, 0xffffff, ...this.venue.palette.accents];
+    for (let s = 0; s < 5; s++) {
+      const ox = -hx * 0.8 + (s / 4) * hx * 1.6;
+      for (let k = 0; k < 40; k++) {
+        this.dark.emit({
+          x: ox,
+          y: 1,
+          z: -hz * 0.8,
+          vx: (Math.random() - 0.5) * 12,
+          vy: 18 + Math.random() * 10,
+          vz: 6 + Math.random() * 12,
+          life: 3 + Math.random(),
+          size: 0.45 + Math.random() * 0.3,
+          sizeEnd: 0.4,
+          color: acc[k % acc.length]!,
+          shape: k % 6 === 0 ? Shape.Note : Shape.Square,
+          drag: 1.2,
+          gravity: 8,
+          spin: (Math.random() - 0.5) * 16,
+          stretch: k % 6 === 0 ? 1 : 0.5,
+        });
+      }
+    }
+    V.impact(this.audio, this.audio.now, 0.5);
+  }
+
+  /** After the finale the show never quite stops: gold rain and the odd rocket behind the results. */
+  private finaleAmbience(dt: number): void {
+    if (Math.random() < dt * 1.6) this.firework(Math.floor(Math.random() * 5));
+    const b = this.venue.bounds;
+    const hx = b.kind === 'rect' ? b.hx : b.r;
+    const hz = b.kind === 'rect' ? b.hz : b.r;
+    const n = Math.round(dt * 90);
+    for (let k = 0; k < n; k++) {
+      this.dark.emit({
+        x: (Math.random() - 0.5) * hx * 2.2,
+        y: 22,
+        z: -hz + Math.random() * hz * 2,
+        vx: (Math.random() - 0.5) * 2,
+        vy: -5 - Math.random() * 3,
+        vz: (Math.random() - 0.5) * 2,
+        life: 4.5,
+        size: 0.45,
+        sizeEnd: 0.4,
+        color: k % 3 ? 0xffd36b : 0xfff4e0,
+        shape: Shape.Square,
+        drag: 0.5,
+        gravity: 1,
+        spin: (Math.random() - 0.5) * 12,
+        stretch: 0.5,
+      });
+    }
   }
 
   private afterBoss(): void {
@@ -2293,7 +2393,7 @@ export class Game {
     // keep the camera over the room: it may lag the player near the walls instead of showing the void
     const b = this.venue.bounds;
     const cx = b.kind === 'rect' ? clamp(p.x, -b.hx + 13, b.hx - 13) : p.x * 0.8;
-    const cz = b.kind === 'rect' ? clamp(p.z, -b.hz + 7, b.hz - 3) : p.z * 0.8;
+    const cz = b.kind === 'rect' ? clamp(p.z, -b.hz + 7, b.hz - 8) : p.z * 0.8;
     this.rig.target.set(cx, 0, cz);
     this.venue.occlude?.(p.x, p.z);
     const boss = this.boss && this.boss.entry?.alive ? this.boss : null;
@@ -2309,6 +2409,17 @@ export class Game {
     this.rig.distance = damp(this.rig.distance, baseDist, this.rig.distance > baseDist + 8 ? 1.6 : 1.2, rawDt);
     this.rig.pitch = 0.98;
     this.rig.yaw = 0;
+    if (this.finaleT >= 0) {
+      // victory lap: crane back and tilt up until the whole show is in frame — deck, crowd, LED wall
+      this.finaleT += rawDt;
+      const k = easeInOutSine(clamp((this.finaleT - 0.8) / 3, 0, 1));
+      this.rig.target.set(lerp(cx, 0, k), 0, lerp(cz, -9, k));
+      this.rig.setLookAhead(0, 0);
+      this.rig.distance = lerp(this.rig.distance, 72, k);
+      this.rig.pitch = lerp(0.98, 0.57, k);
+      this.hud.setCinematic(k > 0.2);
+      if (this.finaleT > 3 && rawDt > 0) this.finaleAmbience(rawDt);
+    }
     const kick = Math.pow(1 - beatPhase, 6);
     if (kick > 0.9 && drop) this.rig.punch(1.2);
     this.rig.update(rawDt, this.save.settings.shake);
@@ -2317,6 +2428,17 @@ export class Game {
   }
 
   /* ───────────────────────────── helpers ───────────────────────────── */
+
+  private runScheduled(dt: number): void {
+    for (let i = this.scheduled.length - 1; i >= 0; i--) {
+      const s = this.scheduled[i]!;
+      s.t -= dt;
+      if (s.t <= 0) {
+        this.scheduled.splice(i, 1);
+        s.fn();
+      }
+    }
+  }
 
   private schedule(delay: number, fn: () => void): void {
     this.scheduled.push({ t: delay, fn });
@@ -2377,6 +2499,15 @@ export class Game {
       setSilence: (on) => {
         this.hud.announce(on ? 'THE SILENCE' : 'SOUND RETURNS', on ? 'build hype and DROP to break it' : 'the Hush is staggered — hit it!', on ? '#8060ff' : '#ffffff', 3);
         if (on) this.run!.hype = Math.max(this.run!.hype, 0.4);
+      },
+      crowdAid: (n) => {
+        const p = this.player;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2 + Math.random();
+          this.pickups.spawn('heart', p.x + Math.cos(a) * 5, p.z + Math.sin(a) * 5, 1);
+        }
+        this.hud.toast(`THE CROWD THROWS YOU ${n} HEARTS`, '#ff5a8a');
+        V.crowdCheer(this.audio, this.audio.now, 0.8, 2);
       },
       hpMult: 1,
       camQuat: new THREE.Quaternion(),

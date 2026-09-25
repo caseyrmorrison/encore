@@ -344,6 +344,7 @@ export class Basement implements Venue {
   private readonly neonMats: THREE.MeshBasicMaterial[] = [];
   private readonly parLenses: THREE.MeshStandardMaterial[] = [];
   private readonly pillarMats: THREE.MeshPhysicalMaterial[] = [];
+  private readonly capMats: THREE.MeshStandardMaterial[] = [];
   private strobe = 0;
   private readonly tmpV = new THREE.Vector3();
   readonly stageCenter = new THREE.Vector3(0, 1.2, -HZ - 3.5);
@@ -473,9 +474,28 @@ export class Basement implements Venue {
       const collar = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 1.12, o.r * 1.12, 0.35, 28), M.darkChrome());
       collar.position.set(o.x, 0.18, o.z);
       this.group.add(collar);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 1.3, o.r * 1.05, 0.6, 28), pillarMat);
+      // the top is what the camera sees most: a matte capital (gloss reads as a grey disc from
+      // above) with a neon lip and an uplighter can so it looks rigged, not unfinished
+      const capMat = new THREE.MeshStandardMaterial({ color: 0x16131c, roughness: 0.9, metalness: 0, transparent: true });
+      this.capMats.push(capMat);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 1.3, o.r * 1.05, 0.6, 28), capMat);
       cap.position.set(o.x, 6.7, o.z);
       this.group.add(cap);
+      const lip = new THREE.Mesh(new THREE.TorusGeometry(o.r * 1.3, 0.06, 8, 44), neonMat);
+      lip.rotation.x = Math.PI / 2;
+      lip.position.set(o.x, 7.0, o.z);
+      this.group.add(lip);
+      const inner = new THREE.Mesh(new THREE.TorusGeometry(o.r * 0.9, 0.035, 6, 40), neonMat);
+      inner.rotation.x = Math.PI / 2;
+      inner.position.set(o.x, 7.01, o.z);
+      this.group.add(inner);
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.5, 18), capMat);
+      can.position.set(o.x, 7.25, o.z);
+      this.group.add(can);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.27, 18), M.glow(0xfff0d0, 3));
+      lens.rotation.x = -Math.PI / 2;
+      lens.position.set(o.x, 7.51, o.z);
+      this.group.add(lens);
     });
 
     // haze near the floor
@@ -735,7 +755,7 @@ export class Basement implements Venue {
       m.rotation.z = rot;
       this.group.add(m);
     };
-    tag('NO SILENCE', '#ff2d78', -22, 9.5, 150, 0.06);
+    tag('NO SILENCE', '#ff2d78', -21, 12.4, 150, 0.06);
     tag('HUSH GO HOME', '#2ec8ff', 21, 8.2, 120, -0.05);
     // tagline stencilled under the sign
     const line = canvasTexture(2048, 128, (g, w, h) => {
@@ -829,6 +849,9 @@ export class Basement implements Venue {
       const m = this.pillarMats[i]!;
       m.opacity += ((hidden ? 0.22 : 1) - m.opacity) * 0.15;
       m.depthWrite = m.opacity > 0.9;
+      const c = this.capMats[i]!;
+      c.opacity = m.opacity;
+      c.depthWrite = m.depthWrite;
     });
   }
 

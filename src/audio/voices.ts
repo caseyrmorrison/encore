@@ -1,4 +1,4 @@
-import type { AudioEngine } from './engine';
+import { AudioEngine } from './engine';
 import { midiToFreq } from './theory';
 
 /**
@@ -502,9 +502,7 @@ export async function bakeDrumSamples(target: AudioEngine): Promise<void> {
   const rate = target.ctx.sampleRate;
   const make = async (name: string, seconds: number, fn: (e: AudioEngine) => void): Promise<void> => {
     const ctx = new OfflineAudioContext(1, Math.ceil(rate * seconds), rate);
-    // imported lazily to avoid a cycle at module init
-    const { AudioEngine: Eng } = await import('./engine');
-    const e = new Eng(ctx, true);
+    const e = new AudioEngine(ctx, true);
     fn(e);
     target.samples.set(name, await ctx.startRendering());
   };

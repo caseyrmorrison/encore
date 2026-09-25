@@ -70,6 +70,7 @@ uniform vec4 uEyeParams; // y, sep, size, style
 uniform float uTime;
 uniform vec2 uRimShape; // power, strength
 uniform vec3 uCamDir;   // world direction toward the camera
+uniform float uVoid;
 varying vec3 vN;
 varying vec3 vObj;
 varying vec3 vView;
@@ -90,6 +91,9 @@ void main() {
   col += uRim * fres * uRimShape.y;
   col += vec3(0.012, 0.01, 0.02) * pow(top, 6.0);
   col += uFloor * bottom * 0.3 * smoothstep(1.0, 0.0, vWorldY);
+  // a void (the Hush itself) swallows even its own fibres: only the rim and eyes survive
+  col *= 1.0 - uVoid;
+  col += uRim * fres * uRimShape.y * uVoid;
 
   // eyes are painted on whichever side of the head faces the camera (sprite-style), so the
   // high top-down camera always sees a face; masked to the head band in object space
@@ -177,6 +181,7 @@ export function makeHushMaterial(look: HushLook, rim: THREE.Color, floor: THREE.
       uRimShape: { value: new THREE.Vector2(4.5, 0.6) },
       uCamDir: { value: new THREE.Vector3(0, 0.83, 0.56) },
       uBeatU: { value: 0 },
+      uVoid: { value: 0 },
     },
   });
 }
@@ -260,16 +265,29 @@ export function hushLooks(): Record<HushKind, HushLook> {
   arm.rotateX(-1.1);
   arm.translate(0.05, 1.18, 0.3);
 
-  // Bouncer: wide slab of a creature. Arms crossed. Sunglasses (visor eyes).
-  const torso = new THREE.BoxGeometry(1.5, 1.35, 1.0, 2, 2, 2);
-  torso.translate(0, 0.95, 0);
-  const head = new THREE.BoxGeometry(0.8, 0.62, 0.72);
-  head.translate(0, 1.95, 0.05);
-  const armsX = new THREE.CapsuleGeometry(0.2, 1.1, 4, 10);
-  armsX.rotateZ(Math.PI / 2);
-  armsX.translate(0, 1.05, 0.55);
-  const legs = new THREE.BoxGeometry(1.1, 0.35, 0.8);
-  legs.translate(0, 0.18, 0);
+  // Bouncer: a barrel-chested doorman with a tiny head, arms folded across the chest.
+  // All rounded forms: boxes read as unfinished geometry under the velvet shader.
+  const torso = new THREE.SphereGeometry(0.82, 26, 18);
+  torso.scale(1.05, 1.0, 0.72);
+  torso.translate(0, 1.12, 0);
+  const traps = new THREE.CapsuleGeometry(0.3, 1.0, 6, 14);
+  traps.rotateZ(Math.PI / 2);
+  traps.translate(0, 1.7, -0.05);
+  const head = new THREE.SphereGeometry(0.34, 20, 14);
+  head.scale(1, 1.05, 1);
+  head.translate(0, 2.08, 0.04);
+  const armL = new THREE.CapsuleGeometry(0.2, 0.95, 5, 12);
+  armL.rotateZ(Math.PI / 2 - 0.32);
+  armL.translate(0, 1.18, 0.56);
+  const armR = new THREE.CapsuleGeometry(0.19, 0.95, 5, 12);
+  armR.rotateZ(Math.PI / 2 + 0.32);
+  armR.translate(0, 1.26, 0.6);
+  const legs: THREE.BufferGeometry[] = [];
+  for (const x of [-0.34, 0.34]) {
+    const leg = new THREE.CapsuleGeometry(0.22, 0.34, 4, 10);
+    leg.translate(x, 0.4, 0);
+    legs.push(leg);
+  }
 
   // Wisp: a tiny darting spark of silence (boss adds)
   const wisp = new THREE.IcosahedronGeometry(0.35, 1);
@@ -298,10 +316,10 @@ export function hushLooks(): Record<HushKind, HushLook> {
       glitch: 0,
     },
     bouncer: {
-      geometry: merge([torso, head, armsX, legs]),
-      eyeY: 2.0,
-      eyeSep: 0.34,
-      eyeSize: 0.1,
+      geometry: merge([torso, traps, head, armL, armR, ...legs]),
+      eyeY: 2.1,
+      eyeSep: 0.16,
+      eyeSize: 0.09,
       eyeStyle: 1,
       squash: 0.06,
       glitch: 0,

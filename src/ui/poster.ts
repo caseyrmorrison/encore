@@ -108,7 +108,7 @@ export async function renderPoster(d: PosterData): Promise<Blob | null> {
   // the band
   const icons = await Promise.all(d.tracks.map((t) => loadImage(t.icon)));
   const n = Math.max(1, icons.length);
-  const size = Math.min(170, 900 / n);
+  const size = Math.min(130, 900 / n);
   icons.forEach((im, i) => {
     if (!im) return;
     const x = W / 2 - (n * size) / 2 + i * size;
@@ -119,7 +119,7 @@ export async function renderPoster(d: PosterData): Promise<Blob | null> {
   const mx = 90;
   const my = 380 + size + 20;
   const mw = W - 180;
-  const rowH = Math.min(42, 420 / Math.max(1, d.tracks.length));
+  const rowH = Math.min(34, 250 / Math.max(1, d.tracks.length));
   const mh = rowH * d.tracks.length + 70;
   const mg = g.createLinearGradient(0, my, 0, my + mh);
   mg.addColorStop(0, '#2c2a31');
@@ -154,7 +154,7 @@ export async function renderPoster(d: PosterData): Promise<Blob | null> {
   });
 
   // grooves
-  let gy = my + mh + 60;
+  let gy = my + mh + 50;
   if (d.grooves.length) {
     g.font = '24px Bungee, Impact, sans-serif';
     let gx = 0;
@@ -170,7 +170,7 @@ export async function renderPoster(d: PosterData): Promise<Blob | null> {
       g.fillText(gr.genre, gx + widths[i]! / 2, gy + 6);
       gx += widths[i]! + 14;
     });
-    gy += 70;
+    gy += 62;
   }
 
   // stats
@@ -185,29 +185,53 @@ export async function renderPoster(d: PosterData): Promise<Blob | null> {
     g.textAlign = 'center';
     g.fillStyle = '#ffffff';
     g.font = '52px Bungee, Impact, sans-serif';
-    g.fillText(value, x, gy + 20);
+    g.fillText(value, x, gy + 16);
     g.fillStyle = '#a89fc2';
     g.font = '500 18px "JetBrains Mono", monospace';
-    g.fillText(label, x, gy + 60);
+    g.fillText(label, x, gy + 52);
   });
 
-  // support act
+  // laid out bottom-up from the ticket stub so a tall machine can never collide with it
+  const ty = H - 120;
+  const fansY = ty - 66;
+  const sy = Math.max(gy + 104, fansY - 118);
   g.textAlign = 'center';
   g.fillStyle = 'rgba(255,255,255,0.45)';
-  g.font = '500 20px "JetBrains Mono", monospace';
-  g.fillText('WITH VERY SPECIAL GUESTS', W / 2, H - 220);
+  g.font = '500 18px "JetBrains Mono", monospace';
+  g.fillText('WITH VERY SPECIAL GUESTS', W / 2, sy);
   g.fillStyle = '#cbb8ff';
-  g.font = '34px Bungee, Impact, sans-serif';
-  g.fillText(d.won ? 'THE HUSH (SILENCED)' : 'THE HUSH', W / 2, H - 180);
-
-  // footer
-  g.fillStyle = '#ff2d78';
   g.font = '30px Bungee, Impact, sans-serif';
-  g.fillText(`+${formatInt(d.fans)} FANS`, W / 2, H - 120);
-  g.fillStyle = 'rgba(255,255,255,0.6)';
+  g.fillText(d.won ? 'THE HUSH (SILENCED)' : 'THE HUSH', W / 2, sy + 38);
+
+  // the headline number: fans won, in gold neon
+  neon(g, `+${formatInt(d.fans)} FANS`, W / 2, fansY, 60, '#ffb52e');
+
+  // ticket stub: perforation, ADMIT ONE, and the way back in
+  g.strokeStyle = 'rgba(255,255,255,0.28)';
+  g.setLineDash([10, 10]);
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(60, ty);
+  g.lineTo(W - 60, ty);
+  g.stroke();
+  g.setLineDash([]);
+  for (const x of [0, W]) {
+    g.fillStyle = '#0b0710';
+    g.beginPath();
+    g.arc(x, ty, 26, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.fillStyle = '#ff2d78';
+  g.font = '26px Bungee, Impact, sans-serif';
+  g.textAlign = 'left';
+  g.fillText('ADMIT ONE', 90, ty + 64);
+  g.textAlign = 'right';
+  g.fillStyle = 'rgba(255,255,255,0.7)';
   g.font = '500 20px "JetBrains Mono", monospace';
   const where = `${location.host}${location.pathname}`.replace(/\/$/, '');
-  g.fillText(d.daily ? `DAILY SETLIST · ${where}` : `SEED ${d.seedCode} · ${where}?seed=${d.seedCode}`, W / 2, H - 70);
+  g.fillText(d.daily ? `DAILY SETLIST · ${where}` : `${where}?seed=${d.seedCode}`, W - 90, ty + 50);
+  g.fillStyle = 'rgba(255,255,255,0.4)';
+  g.fillText(d.daily ? 'same run for everyone today' : `SEED ${d.seedCode} · play the same show`, W - 90, ty + 80);
 
   return new Promise((resolve) => c.toBlob((b) => resolve(b), 'image/png'));
 }
