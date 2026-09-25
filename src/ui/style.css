@@ -3190,3 +3190,22 @@ div.touch {
 .touch .card-key {
   display: none;
 }
+
+/* a picked card's art flying into the machine, and the row it lands on */
+.fly-art {
+  position: fixed;
+  z-index: 60;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.8));
+}
+.seq-row.landed,
+.seq-machine.landed {
+  animation: rowland 0.8s var(--ease-out);
+}
+@keyframes rowland {
+  0% {
+    background: color-mix(in srgb, var(--c, #ffffff) 55%, transparent);
+    box-shadow: 0 0 40px color-mix(in srgb, var(--c, #ffffff) 70%, transparent);
+  }
+}

@@ -141,6 +141,11 @@ export class DraftScreen {
     this.opts.pick(i);
   }
 
+  /** The rendered art of an offered card (the pick flies from here into the machine). */
+  artOf(i: number): HTMLImageElement | null {
+    return this.cardEls[i]?.querySelector('.card-art img') ?? null;
+  }
+
   /** The game tells us whether placement is still pending. */
   setDoneState(ready: boolean, label?: string): void {
     this.doneBtn.disabled = !ready;

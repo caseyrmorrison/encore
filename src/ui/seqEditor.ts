@@ -217,6 +217,46 @@ export class SeqEditor {
     }
   }
 
+  /**
+   * A picked card lands: its art flies from the card into the machine (a row's icon, or the
+   * logo for pedals and step FX) and that row flashes as it arrives.
+   */
+  land(from: HTMLImageElement, trackIndex: number, onLand: () => void): void {
+    const row = trackIndex >= 0 ? this.rows[trackIndex] : undefined;
+    const target = (row?.querySelector('.seq-icon') as HTMLElement | null) ?? (this.el.querySelector('.seq-logo') as HTMLElement | null);
+    const src = from.currentSrc || from.src;
+    if (!target || !src) return onLand();
+    const a = from.getBoundingClientRect();
+    const b = target.getBoundingClientRect();
+    const fly = h('img', { class: 'fly-art', src, alt: '' });
+    fly.style.left = `${a.left}px`;
+    fly.style.top = `${a.top}px`;
+    fly.style.width = `${a.width}px`;
+    fly.style.height = `${a.height}px`;
+    document.body.append(fly);
+    const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+    const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    const k = Math.max(0.2, b.width / Math.max(1, a.width));
+    const anim = fly.animate(
+      [
+        { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1 },
+        { transform: `translate(${dx * 0.35}px, ${dy * 0.35 - 60}px) scale(1.15) rotate(-8deg)`, opacity: 1, offset: 0.35 },
+        { transform: `translate(${dx}px, ${dy}px) scale(${k}) rotate(0deg)`, opacity: 0.9 },
+      ],
+      { duration: 520, easing: 'cubic-bezier(0.55, 0, 0.8, 0.3)' },
+    );
+    anim.onfinish = () => {
+      fly.remove();
+      const flash = row ?? (this.el.querySelector('.seq-machine') as HTMLElement | null);
+      if (flash) {
+        flash.classList.remove('landed');
+        void flash.offsetWidth;
+        flash.classList.add('landed');
+      }
+      onLand();
+    };
+  }
+
   /** Called every frame while visible: moves the running light. */
   tick(step: number): void {
     if (this.pattern.version !== this.lastVersion) this.refresh();

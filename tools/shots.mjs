@@ -338,7 +338,9 @@ const S = {
     await sleep(1500);
     await shot('draft');
     await page.keyboard.press('Digit1');
-    await sleep(900);
+    await sleep(220);
+    await shot('draft-flying');
+    await sleep(680);
     await shot('draft-picked');
   },
   async build() {

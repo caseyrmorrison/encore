@@ -2197,6 +2197,15 @@ export class Game {
     if (r !== 'common') this.music.fanfare(r === 'legendary' || r === 'epic');
     dp.placing = this.applyCard(card);
     this.updateDraftDone();
+    // the pick flies into the machine and lands on the row it changes, with a thump
+    const inst = 'inst' in card ? card.inst : null;
+    const row = inst ? this.run!.pattern.tracks.findIndex((t) => t.inst === inst) : -1;
+    const art = this.draftUi.artOf(i);
+    if (art && this.editor)
+      this.editor.land(art, row, () => {
+        V.kick(this.audio, this.audio.now, 0.6, true);
+        V.bell(this.audio, this.audio.now + 0.01, 84, 0.5);
+      });
   }
 
   /** Apply a card to the run. Returns the kind of placement the player still has to do. */
