@@ -36,6 +36,14 @@
      *your* lit steps back at you, skips next to you, sweeps trending beams).
 - Headline Megafest → the world tour loops "after hours": ×3.2 enemy health per loop.
 
+## Crowd requests
+
+Every set the crowd shouts one request under the set timer — silence N Hush, land N perfect
+dashes, call a DROP, hit a ×N streak, go N seconds untouched, or lock in a new groove. Goals scale
+with the venue; playing it throws tips (for the backstage shop) with a plaque and a roar. They give
+each set a small, readable goal beyond "survive", and nudge players toward the mechanics that make
+builds break (perfect dashes, drops, grooves).
+
 ## Meta progression
 
 Fans persist between runs and buy three kinds of things at the merch table:
