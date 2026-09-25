@@ -60,11 +60,12 @@ void main() {
   // distance to the nearest concentric band (every 7.5 units)
   float ringD = 3.75 - abs(mod(r, 7.5) - 3.75);
   float rings = smoothstep(0.09, 0.0, ringD) * step(1.0, r);
-  float spokes = smoothstep(0.06, 0.0, abs(sin(ang * 12.0)) * r * 0.08 - 0.02) * step(r, 7.5);
-  float petal = smoothstep(0.06, 0.0, abs(r - (4.0 + 1.6 * cos(ang * 8.0)))) * step(r, 7.0);
+  float spokes = smoothstep(0.04, 0.0, abs(sin(ang * 12.0)) * r * 0.08 - 0.02) * step(r, 7.5);
+  float petal = smoothstep(0.045, 0.0, abs(r - (4.0 + 1.6 * cos(ang * 8.0)))) * step(r, 7.0);
   float inlay = max(max(rings, spokes), petal);
-  vec3 gold = vec3(1.0, 0.72, 0.28);
-  vec3 col = mix(marble, gold * (0.5 + beat * 0.9 + uEnergy * 0.4), inlay * 0.85);
+  // (kept low and bronze: bright gold lines on the floor read as attack warnings)
+  vec3 gold = vec3(0.85, 0.6, 0.26);
+  vec3 col = mix(marble, gold * (0.26 + beat * 0.3 + uEnergy * 0.18), inlay * 0.7);
 
   // stained-glass light pools drifting across the nave
   for (int i = 0; i < 6; i++) {
@@ -84,6 +85,7 @@ void main() {
   float pd = length(w - uPlayer);
   col += vec3(1.0, 0.85, 0.65) * 0.14 * smoothstep(7.0, 0.0, pd);
   col += ripples(w);
+  col = paintOver(col, w);
 
   // beyond the nave: stone steps into darkness
   float inside = smoothstep(uR + 0.2, uR - 0.2, r);

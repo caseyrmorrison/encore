@@ -159,8 +159,25 @@ export class Feedback extends Boss {
     const capGeo = new THREE.SphereGeometry(0.16, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
     capGeo.rotateX(Math.PI / 2);
     const surroundGeo = new THREE.TorusGeometry(0.5, 0.045, 8, 32);
-    const grille = new THREE.MeshStandardMaterial({ color: 0x0c0a0c, roughness: 0.95 });
-    const tolexMat = new THREE.MeshStandardMaterial({ map: tolex(), color: 0x2a2630, roughness: 0.62, metalness: 0.05 });
+    // woven grille cloth: dark basket weave with a faint silver fleck
+    const cloth = canvasTexture(128, 128, (g, w, h) => {
+      g.fillStyle = '#0e0d10';
+      g.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 4)
+        for (let x = 0; x < w; x += 4) {
+          const on = ((x + y) / 4) % 2 === 0;
+          g.fillStyle = on ? '#2a2830' : '#17161b';
+          g.fillRect(x, y, 4, 2);
+          g.fillStyle = on ? '#1d1c22' : '#302e37';
+          g.fillRect(x, y + 2, 4, 2);
+        }
+    });
+    cloth.wrapS = cloth.wrapT = THREE.RepeatWrapping;
+    cloth.repeat.set(6, 5);
+    const grille = new THREE.MeshStandardMaterial({ map: cloth, roughness: 0.92, envMapIntensity: 0.15 });
+    // black leather, not cardboard: the club's bright environment map would wash a
+    // mid-rough dark box out to tan, so the tolex barely takes it
+    const tolexMat = new THREE.MeshStandardMaterial({ map: tolex(), color: 0x1c1a20, roughness: 0.8, metalness: 0, envMapIntensity: 0.18 });
     this.tolexMat = tolexMat;
     const piping = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.4 });
     const pipeH = new THREE.BoxGeometry(3.2, 0.06, 0.06);
@@ -200,6 +217,32 @@ export class Feedback extends Boss {
     const head = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.3, 2), tolexMat);
     head.position.set(0, 6.3, 0);
     body.add(head);
+    // the name plate on top — what the high camera actually sees — and a leather handle
+    const logo = canvasTexture(512, 192, (g, w, h) => {
+      g.fillStyle = '#16141a';
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#e8dcc0';
+      g.lineWidth = 6;
+      g.strokeRect(10, 10, w - 20, h - 20);
+      g.font = '96px Bungee, Impact, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = '#f2e6c8';
+      g.fillText('FEEDBACK', w / 2, h / 2 + 6);
+    });
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 1.4), new THREE.MeshStandardMaterial({ map: logo, roughness: 0.6, envMapIntensity: 0.2 }));
+    plate.rotation.x = -Math.PI / 2;
+    plate.position.set(0, 6.96, 0.1);
+    body.add(plate);
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.09, 8, 20, Math.PI), M.rubber());
+    handle.position.set(0, 6.95, -0.6);
+    body.add(handle);
+    // CLIP lights: blaze whenever the stack attacks
+    for (const sx of [-1.75, 1.75]) {
+      const clip = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), this.clipMat);
+      clip.position.set(sx, 6.6, 1.02);
+      body.add(clip);
+    }
     const panel = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.7, 0.05), M.gold());
     panel.position.set(0, 6.05, 1.01);
     body.add(panel);
@@ -245,6 +288,7 @@ export class Feedback extends Boss {
     this.mouth = mouth;
   }
 
+  private readonly clipMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff1a1a, emissiveIntensity: 0.2 });
   private readonly jacks: THREE.Group[] = [];
   private readonly eyes: THREE.Mesh[] = [];
   private mouth!: THREE.Mesh;
@@ -306,6 +350,7 @@ export class Feedback extends Boss {
     this.pulse *= Math.exp(-dt * 6);
     const kick = Math.pow(1 - beatPhase, 4);
     this.coneMat.emissiveIntensity = 0.8 + kick * 4 + this.pulse * 5;
+    this.clipMat.emissiveIntensity = 0.2 + this.pulse * 7 + (kick > 0.8 ? 1.5 : 0);
     for (const c of this.cones) c.position.z = 1.12 + kick * 0.12;
     this.group.scale.set(1 + kick * 0.03, 1 - kick * 0.03, 1 + kick * 0.03);
     this.tolexMat.emissive.setRGB(1, 0.3, 0.2).multiplyScalar(Math.min(1, e.flash) * 0.6);
@@ -382,7 +427,9 @@ export class Cantor extends Boss {
   readonly name = 'THE CANTOR';
   readonly title = 'Choirmaster of the unsung';
   readonly color = 0x9fb8ff;
-  private readonly bodyMat: THREE.ShaderMaterial;
+  private readonly robeMat: THREE.MeshStandardMaterial;
+  private readonly mouth: THREE.Mesh;
+  private sing = 0;
   private halo: THREE.Mesh;
   private readonly hands: THREE.Mesh[] = [];
   private angle = 0;
@@ -397,19 +444,82 @@ export class Cantor extends Boss {
 
   constructor(_rim: THREE.Color) {
     super();
-    const look = hushLooks().mute;
-    // the Cantor's robe catches gold at its edges so it reads on dark marble from above
-    this.bodyMat = makeHushMaterial(look, new THREE.Color(0xffc870), new THREE.Color(0x6040ff));
-    (this.bodyMat.uniforms.uEyeParams!.value as THREE.Vector4).set(1.62, 0.16, 0.09, 4);
-    // tall robe seen from above is mostly grazing: keep the gold to a thin edge
-    (this.bodyMat.uniforms.uRimShape!.value as THREE.Vector2).set(9, 0.9);
-    const robe = new THREE.Mesh(look.geometry, this.bodyMat);
-    robe.scale.setScalar(3.4);
+    // an ivory-and-gold choirmaster: pale against the black marble so it reads from above
+    this.robeMat = new THREE.MeshStandardMaterial({ color: 0xece3d2, roughness: 0.5, metalness: 0.05, emissive: 0xffffff, emissiveIntensity: 0 });
+    const gold = M.gold();
+    const profile: [number, number][] = [
+      [0.01, 0],
+      [2.3, 0.05],
+      [2.45, 0.4],
+      [2.0, 2.4],
+      [1.55, 4.2],
+      [1.7, 4.75],
+      [1.3, 5.3],
+      [0.2, 5.45],
+    ];
+    const v2 = (k: number): THREE.Vector2[] => profile.map(([r, y]) => new THREE.Vector2(r * k, y));
+    const robe = new THREE.Mesh(new THREE.LatheGeometry(v2(1), 40), this.robeMat);
     this.group.add(robe);
+    // gold stoles following the robe's curve down the front
+    for (const phi of [-0.34, 0.2]) {
+      const stole = new THREE.Mesh(new THREE.LatheGeometry(v2(1.015), 4, phi, 0.14), gold);
+      this.group.add(stole);
+    }
+    for (const [r, y, t] of [
+      [2.43, 0.38, 0.12],
+      [1.56, 4.2, 0.08],
+      [1.66, 4.78, 0.1],
+    ] as const) {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(r, t, 8, 48), gold);
+      band.rotation.x = Math.PI / 2;
+      band.position.y = y;
+      this.group.add(band);
+    }
+    // hood with a dark face: two cold slit eyes and a mouth that opens as it sings
+    const hood = new THREE.Mesh(new THREE.SphereGeometry(1.2, 28, 20), this.robeMat);
+    hood.position.set(0, 5.85, 0);
+    hood.scale.set(1, 1.08, 1);
+    this.group.add(hood);
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.78, 28), new THREE.MeshBasicMaterial({ color: 0x05030a }));
+    face.position.set(0, 5.8, 1.19);
+    face.rotation.x = -0.12;
+    face.scale.set(0.9, 1.1, 1);
+    this.group.add(face);
+    const eyeMat = M.glow(0xcfe0ff, 4);
+    for (const sx of [-0.28, 0.28]) {
+      const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.07), eyeMat);
+      eye.position.set(sx, 6.02, 1.22);
+      eye.rotation.set(-0.12, 0, sx > 0 ? -0.18 : 0.18);
+      this.group.add(eye);
+    }
+    this.mouth = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), M.glow(0xffe9a8, 4));
+    this.mouth.position.set(0, 5.5, 1.23);
+    this.mouth.rotation.x = -0.12;
+    this.group.add(this.mouth);
+    // mitre: a pointed-arch cap with a gold cross-band
+    const arch = new THREE.Shape();
+    arch.moveTo(-0.85, 0);
+    arch.lineTo(0.85, 0);
+    arch.quadraticCurveTo(0.95, 1.2, 0, 2.3);
+    arch.quadraticCurveTo(-0.95, 1.2, -0.85, 0);
+    const mitreGeo = new THREE.ExtrudeGeometry(arch, { depth: 1.1, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 2 });
+    mitreGeo.translate(0, 0, -0.55);
+    const mitre = new THREE.Mesh(mitreGeo, this.robeMat);
+    mitre.position.set(0, 6.75, 0);
+    this.group.add(mitre);
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.9, 0.08), gold);
+    crossV.position.set(0, 7.65, 0.62);
+    this.group.add(crossV);
+    const crossH = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.2, 0.08), gold);
+    crossH.position.set(0, 7.9, 0.63);
+    this.group.add(crossH);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.22, 1.3), gold);
+    brim.position.set(0, 6.8, 0);
+    this.group.add(brim);
     // crown of light: a flat golden ring with rays, visible from the camera
     // a thin gold halo behind the head (tilted toward the camera so it reads from above)
     this.crown = new THREE.Group();
-    this.crown.position.set(0, 6.4, -1.3);
+    this.crown.position.set(0, 7.4, -1.1);
     this.crown.rotation.x = -0.35;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.08, 10, 64), M.glow(0xffd36b, 3.2));
     this.crown.add(ring);
@@ -425,10 +535,15 @@ export class Cantor extends Boss {
       this.crown.add(ray);
     }
     this.group.add(this.crown);
-    const handGeo = new THREE.SphereGeometry(0.6, 16, 12);
+    const handGeo = new THREE.SphereGeometry(0.55, 16, 12);
+    const cuffGeo = new THREE.TorusGeometry(0.5, 0.1, 8, 24);
     for (const s of [-1, 1]) {
-      const h = new THREE.Mesh(handGeo, this.bodyMat);
+      const h = new THREE.Mesh(handGeo, this.robeMat);
       h.position.set(s * 2.9, 3.6, 0.9);
+      const cuff = new THREE.Mesh(cuffGeo, gold);
+      cuff.rotation.y = Math.PI / 2;
+      cuff.position.x = -s * 0.35;
+      h.add(cuff);
       this.group.add(h);
       this.hands.push(h);
     }
@@ -474,6 +589,7 @@ export class Cantor extends Boss {
       this.angle += 0.37;
       const arms = this.phase === 2 ? 4 : 3;
       this.radial(ctx, arms, 7.5, this.angle, 0.5);
+      this.sing = 1;
       if (this.phase === 2) this.radial(ctx, arms, 6, -this.angle * 1.3, 0.45);
     }
     if (step === 0 && bar % 2 === 1) {
@@ -539,10 +655,10 @@ export class Cantor extends Boss {
     this.hands.forEach((h, i) => {
       h.position.y = 3.4 + Math.sin(time * 2 + i * 2) * 0.6;
     });
-    this.bodyMat.uniforms.uTime!.value = time;
-    // an eclipse never lifts out of black: hits only catch the rim and blaze the eyes
-    (this.bodyMat.uniforms.uState!.value as THREE.Vector4).x = Math.min(0.3, e.flash);
-    (this.bodyMat.uniforms.uCamDir!.value as THREE.Vector3).set(0, 0, 1).applyQuaternion(ctx.camQuat);
+    // hits make the ivory flare; the mouth opens wide on every note it sings
+    this.robeMat.emissiveIntensity = Math.min(0.5, e.flash * 0.7);
+    this.sing = Math.max(this.sing * Math.exp(-dt * 5), kick * 0.6);
+    this.mouth.scale.set(1 + this.sing * 0.4, 0.5 + this.sing * 2.2, 1);
     for (let i = this.zones.length - 1; i >= 0; i--) {
       const zn = this.zones[i]!;
       zn.life -= dt;
@@ -614,7 +730,8 @@ export class TheHush extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 90000, 4.2);
+    // ×6.2 venue scaling → ~200K: a strong build that uses its DROPs ends it in about 90s
+    this.register(ctx, x, z, 32000, 4.2);
     this.group.position.set(x, 0, z);
   }
 
@@ -637,7 +754,7 @@ export class TheHush extends Boss {
       this.spin += 0.2;
       this.radial(ctx, this.phase >= 2 ? 28 : 22, 8, this.spin, 0.6);
     }
-    if (step === 8 && this.phase >= 3) this.radial(ctx, 16, 10, -this.spin, 0.5);
+    if (step === 8 && this.phase >= 3) this.radial(ctx, 12, 10, -this.spin, 0.5);
     if (step === 4 && bar % 2 === 0) {
       for (let i = 0; i < 6; i++) {
         const a = Math.random() * Math.PI * 2;
@@ -687,10 +804,10 @@ export class TheHush extends Boss {
     (this.bodyMat.uniforms.uCamDir!.value as THREE.Vector3).set(0, 0, 1).applyQuaternion(ctx.camQuat);
 
     if (this.phase >= 3 && this.stunned === 0) {
-      // four sweeping corona lasers
+      // three sweeping corona lasers (dash through them: dashing is invulnerable)
       this.laserAngle += dt * 0.45;
-      for (let k = 0; k < 4; k++) {
-        const a = this.laserAngle + (k * Math.PI) / 2;
+      for (let k = 0; k < 3; k++) {
+        const a = this.laserAngle + (k * Math.PI * 2) / 3;
         const ex = e.x + Math.cos(a) * 34;
         const ez = e.z + Math.sin(a) * 34;
         ctx.beams.add(e.x, 1.2, e.z, ex, 1.2, ez, 0.9, 0xfff0d8, dt * 1.6);

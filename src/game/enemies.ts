@@ -471,7 +471,7 @@ export class EnemyManager {
         e.freeze > 0 ? 0 : pulse,
       );
     }
-    for (const b of Object.values(this.batches)) b.end(time);
+    for (const b of Object.values(this.batches)) b.end(time, pulse);
     this.shadows.count = ns;
     this.shadows.instanceMatrix.needsUpdate = true;
   }

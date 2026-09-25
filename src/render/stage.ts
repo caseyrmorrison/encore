@@ -36,6 +36,8 @@ export class Stage {
   readonly vignette: VignetteEffect;
   private readonly noise: NoiseEffect;
   readonly hueSat: HueSaturationEffect;
+  /** world colour: pulled toward grey while the Hush holds its silence */
+  baseSaturation = 0;
   /** 0..1 build-up tunnel vision; drop saturation surge */
   buildUp = 0;
   surge = 0;
@@ -118,7 +120,7 @@ export class Stage {
     this.surge *= Math.exp(-dt * 0.9);
     this.vignette.darkness = 0.62 + this.buildUp * 0.33;
     this.vignette.offset = 0.28 - this.buildUp * 0.12;
-    this.hueSat.saturation = this.surge * 0.35 - this.buildUp * 0.35;
+    this.hueSat.saturation = this.baseSaturation + this.surge * 0.35 - this.buildUp * 0.35;
     this.composer.render(dt);
   }
 }

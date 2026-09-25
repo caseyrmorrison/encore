@@ -127,7 +127,7 @@ export const INSTRUMENTS: Record<InstrumentId, InstrumentDef> = {
   lead: def({
     id: 'lead',
     name: 'Lead Synth',
-    short: 'LED',
+    short: 'LEAD',
     color: 0x2ee6ff,
     weapon: 'Homing Notes',
     blurb: 'Glowing notes that seek targets and arpeggiate the chord.',

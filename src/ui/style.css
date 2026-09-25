@@ -370,7 +370,7 @@ button {
 .title-foot {
   margin-top: 18px;
   font-size: 12px;
-  color: var(--dim);
+  color: var(--muted);
   max-width: 400px;
 }
 
@@ -737,6 +737,8 @@ button {
   animation: bump 0.18s var(--ease-back);
 }
 .streak-num {
+  /* bumps grow leftward so a three-digit streak never pushes off the screen edge */
+  transform-origin: right center;
   font-size: 44px;
   color: #fff;
   text-shadow:
@@ -1968,6 +1970,9 @@ body.overlay-open .hud .streak {
 }
 .banner.huge .banner-title {
   font-size: clamp(70px, 12vw, 170px);
+  /* solid letters with a dark keyline: the room behind never shows through */
+  -webkit-text-stroke: 5px rgba(24, 0, 18, 0.9);
+  paint-order: stroke fill;
 }
 .banner.huge .banner-sub {
   font-size: 22px;
@@ -2643,8 +2648,8 @@ div.touch {
   bottom: 0;
   transform: translateY(100%);
 }
-.hud.cinematic::before,
-.hud.cinematic::after {
+.hud.letterbox::before,
+.hud.letterbox::after {
   transform: none;
 }
 .bosscard {
@@ -2771,4 +2776,230 @@ div.touch {
 }
 .hud.cinematic .plaque {
   display: none;
+}
+
+.rotate-hint {
+  display: none;
+}
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-hint:not(.dismissed) {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+    background: radial-gradient(ellipse at 50% 40%, rgba(40, 10, 40, 0.92), rgba(4, 3, 8, 0.97));
+  }
+}
+.rotate-phone {
+  width: 54px;
+  height: 92px;
+  border-radius: 12px;
+  border: 3px solid var(--hot);
+  box-shadow: 0 0 30px rgba(255, 45, 120, 0.6);
+  animation: rotatephone 2.2s var(--ease-out) infinite;
+}
+@keyframes rotatephone {
+  0%,
+  25% {
+    transform: rotate(0);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+.rotate-title {
+  margin-top: 18px;
+  font-family: var(--display);
+  font-size: 26px;
+  color: #fff;
+  text-shadow: 0 0 20px var(--hot);
+}
+.rotate-sub {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* one thing in the middle at a time: toasts step back for stamps and cutscenes */
+.toasts {
+  transition: opacity 0.2s;
+}
+.hud.stamping .toasts,
+.hud.cinematic .toasts {
+  opacity: 0;
+}
+/* the HUD machine during a DROP: gold chassis, every firing step flares */
+.hud.dropping .mini-seq {
+  border-color: rgba(255, 197, 61, 0.8);
+  box-shadow:
+    0 0 30px rgba(255, 180, 40, 0.45),
+    0 12px 30px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, rgba(60, 40, 10, 0.92), rgba(30, 20, 8, 0.92));
+}
+.hud.dropping .mini-cell.on.play {
+  transform: scale(1.5, 1.6);
+}
+/* the playhead is a bright column, not a hairline */
+.mini-cell.play {
+  outline: none;
+  background: #3a3a46;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+.mini-cell.on.play {
+  transform: scale(1.3, 1.45);
+}
+.mini-seq.many .mini-cell {
+  height: 10px;
+}
+.mini-seq.many .mini-label {
+  font-size: 10px;
+  line-height: 10px;
+}
+
+/* results: solid tiles, one row of buttons, and hooks that pull you into the next run */
+.rstat {
+  background: rgba(22, 17, 32, 0.94);
+}
+.results-panel .row {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.results-panel .row .btn {
+  padding-inline: 16px;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .results-panel .row {
+    flex-wrap: wrap;
+  }
+}
+.rhooks {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+  text-align: left;
+}
+.rnext {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 45, 120, 0.08);
+  border: 1px solid rgba(255, 45, 120, 0.3);
+}
+.rnext.ready {
+  background: rgba(255, 197, 61, 0.12);
+  border-color: rgba(255, 197, 61, 0.6);
+  animation: wonglow 0.9s ease-in-out infinite alternate;
+}
+.rnext img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+.rnext > div {
+  flex: 1;
+  display: grid;
+  gap: 5px;
+}
+.rnext-t {
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.rnext-bar {
+  --k: 0;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.rnext-bar i {
+  display: block;
+  height: 100%;
+  width: calc(var(--k) * 100%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--hot), #ffc53d);
+  box-shadow: 0 0 12px rgba(255, 45, 120, 0.8);
+  animation: rnextfill 1.2s var(--ease-out) backwards 0.4s;
+}
+@keyframes rnextfill {
+  from {
+    width: 0;
+  }
+}
+.rnext-n {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.rrumour {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(140, 90, 255, 0.08);
+  border: 1px solid rgba(140, 90, 255, 0.3);
+  font-style: italic;
+  font-size: 13px;
+  color: #d8d0ec;
+}
+.rrumour span {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: #b58cff;
+}
+
+/* phones in landscape: short cards (art beside the words) so the composer stays in reach */
+@media (max-height: 560px) {
+  .card {
+    min-height: 0;
+    width: 250px;
+  }
+  .card-art img {
+    width: 96px;
+    height: 96px;
+  }
+}
+
+.hud.silence .mini-seq {
+  position: relative;
+  filter: grayscale(1) brightness(0.55);
+}
+.hud.silence .hud-bottom::after {
+  content: 'SILENCED — DROP TO BREAK IT';
+  position: absolute;
+  left: 50%;
+  bottom: 38%;
+  transform: translateX(-50%) rotate(-3deg);
+  padding: 4px 14px;
+  border: 2px solid #b39cff;
+  border-radius: 6px;
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: #e6ddff;
+  background: rgba(20, 10, 40, 0.85);
+  box-shadow: 0 0 24px rgba(128, 96, 255, 0.6);
+  animation: blink 1.2s steps(2) infinite;
+}
+.touch .hud.silence .hud-bottom::after {
+  content: 'SILENCED — TAP DROP';
+}
+
+/* tiles flow into full rows however many there are to show */
+.results-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }

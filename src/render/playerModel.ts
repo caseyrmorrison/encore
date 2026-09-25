@@ -17,6 +17,9 @@ export class PlayerModel {
   private readonly haloMat: THREE.MeshBasicMaterial;
   private readonly beatRing: THREE.Mesh;
   private readonly beatRingMat: THREE.MeshBasicMaterial;
+  /** drawn over everything: you can always find yourself inside a horde */
+  private readonly locator: THREE.Mesh;
+  private readonly locatorMat: THREE.MeshBasicMaterial;
   private readonly glowPool: THREE.Mesh;
   private readonly poolMat: THREE.MeshBasicMaterial;
   private readonly cable: THREE.Mesh;
@@ -37,6 +40,8 @@ export class PlayerModel {
   set showFloorFx(on: boolean) {
     this.beatRing.visible = on;
     this.glowPool.visible = on;
+    this.halo.visible = on;
+    this.locator.visible = on;
   }
 
   constructor() {
@@ -134,6 +139,22 @@ export class PlayerModel {
     this.beatRing.rotation.x = -Math.PI / 2;
     this.beatRing.position.y = 0.05;
     this.root.add(this.beatRing);
+
+    this.locatorMat = new THREE.MeshBasicMaterial({
+      color: 0x2ee6ff,
+      transparent: true,
+      opacity: 0.5,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    const loc = new THREE.RingGeometry(1.75, 1.9, 64, 1, 0, Math.PI * 2);
+    this.locator = new THREE.Mesh(loc, this.locatorMat);
+    this.locator.rotation.x = -Math.PI / 2;
+    this.locator.position.y = 0.08;
+    this.locator.renderOrder = 20;
+    this.root.add(this.locator);
 
     // hard-edged coloured follow-spot on the floor
     const poolTex = canvasTexture(256, 256, (g, w, h) => {
@@ -259,6 +280,7 @@ export class PlayerModel {
 
     // approach ring: faint while travelling, bright as it lands on the beat
     this.beatRing.scale.setScalar(1.7 + (1 - beatPhase) * 2.6);
+    this.locatorMat.opacity = 0.28 + kick * 0.4;
     this.beatRingMat.opacity = 0.04 + Math.pow(beatPhase, 3) * 0.3 + kick * 0.55;
     this.beatRingMat.color.copy(this.coreColor);
 

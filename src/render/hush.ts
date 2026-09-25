@@ -18,6 +18,8 @@ export interface HushLook {
   eyeStyle: number;
   squash: number;
   glitch: number;
+  /** eye colour: danger reads at a glance (white fodder, amber dampers, red bouncers…) */
+  eye?: number;
 }
 
 const VERT = /* glsl */ `
@@ -71,6 +73,7 @@ uniform float uTime;
 uniform vec2 uRimShape; // power, strength
 uniform vec3 uCamDir;   // world direction toward the camera
 uniform float uVoid;
+uniform float uKick;    // 0..1, peaks on each beat
 varying vec3 vN;
 varying vec3 vObj;
 varying vec3 vView;
@@ -91,6 +94,8 @@ void main() {
   col += uRim * fres * uRimShape.y;
   col += vec3(0.012, 0.01, 0.02) * pow(top, 6.0);
   col += uFloor * bottom * 0.3 * smoothstep(1.0, 0.0, vWorldY);
+  // a cold white-violet edge that thumps on the beat: the horde stays legible on black floors
+  col += vec3(0.55, 0.5, 0.95) * pow(1.0 - ndv, 3.2) * (0.1 + uKick * 0.22);
   // a void (the Hush itself) swallows even its own fibres: only the rim and eyes survive
   col *= 1.0 - uVoid;
   col += uRim * fres * uRimShape.y * uVoid;
@@ -175,7 +180,8 @@ export function makeHushMaterial(look: HushLook, rim: THREE.Color, floor: THREE.
       uGlitch: { value: look.glitch },
       uRim: { value: rim.clone() },
       uFloor: { value: floor.clone() },
-      uEye: { value: new THREE.Color(0xf4f1ff) },
+      uEye: { value: new THREE.Color(look.eye ?? 0xf4f1ff) },
+      uKick: { value: 0 },
       uEyeParams: { value: new THREE.Vector4(look.eyeY, look.eyeSep, look.eyeSize, look.eyeStyle) },
       uState: { value: new THREE.Vector4(0, 0.5, 0, 0) },
       uRimShape: { value: new THREE.Vector2(4.5, 0.6) },
@@ -294,9 +300,9 @@ export function hushLooks(): Record<HushKind, HushLook> {
   wisp.translate(0, 0.6, 0);
 
   return {
-    mote: { geometry: merge([moteBody, tuft]), eyeY: 0.6, eyeSep: 0.17, eyeSize: 0.13, eyeStyle: 0, squash: 0.16, glitch: 0 },
-    mute: { geometry: merge([robe, shoulders]), eyeY: 1.66, eyeSep: 0.18, eyeSize: 0.075, eyeStyle: 3, squash: 0.08, glitch: 0 },
-    static: { geometry: merge(shards), eyeY: 1.0, eyeSep: 0, eyeSize: 0.22, eyeStyle: 2, squash: 0.05, glitch: 1 },
+    mote: { geometry: merge([moteBody, tuft]), eyeY: 0.6, eyeSep: 0.17, eyeSize: 0.13, eyeStyle: 0, squash: 0.16, glitch: 0, eye: 0xf4f1ff },
+    mute: { geometry: merge([robe, shoulders]), eyeY: 1.66, eyeSep: 0.18, eyeSize: 0.075, eyeStyle: 3, squash: 0.08, glitch: 0, eye: 0xc9a8ff },
+    static: { geometry: merge(shards), eyeY: 1.0, eyeSep: 0, eyeSize: 0.22, eyeStyle: 2, squash: 0.05, glitch: 1, eye: 0x7ff4ff },
     damper: {
       geometry: merge([damperBody, baffle1, baffle2, dome]),
       eyeY: 0.45,
@@ -305,6 +311,7 @@ export function hushLooks(): Record<HushKind, HushLook> {
       eyeStyle: 0,
       squash: 0.1,
       glitch: 0,
+      eye: 0xffb13d,
     },
     shusher: {
       geometry: merge([sBody, sHead, finger, arm]),
@@ -314,6 +321,7 @@ export function hushLooks(): Record<HushKind, HushLook> {
       eyeStyle: 0,
       squash: 0.1,
       glitch: 0,
+      eye: 0xff7ad0,
     },
     bouncer: {
       geometry: merge([torso, traps, head, armL, armR, ...legs]),
@@ -323,8 +331,9 @@ export function hushLooks(): Record<HushKind, HushLook> {
       eyeStyle: 1,
       squash: 0.06,
       glitch: 0,
+      eye: 0xff4a4a,
     },
-    wisp: { geometry: merge([wisp]), eyeY: 0.66, eyeSep: 0.13, eyeSize: 0.1, eyeStyle: 0, squash: 0.25, glitch: 0.4 },
+    wisp: { geometry: merge([wisp]), eyeY: 0.66, eyeSep: 0.13, eyeSize: 0.1, eyeStyle: 0, squash: 0.25, glitch: 0.4, eye: 0xffffff },
   };
 }
 
@@ -388,12 +397,13 @@ export class HushBatch {
     this.n++;
   }
 
-  end(time: number): void {
+  end(time: number, kick = 0): void {
     this.mesh.count = this.n;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.state.needsUpdate = true;
     this.beat.needsUpdate = true;
     this.material.uniforms.uTime!.value = time;
+    this.material.uniforms.uKick!.value = kick;
   }
 
   setColors(rim: THREE.Color, floor: THREE.Color): void {

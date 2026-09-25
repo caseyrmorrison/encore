@@ -735,16 +735,34 @@ export function buildChevrons(color: number): THREE.Group {
   return g;
 }
 
+/** Echo: one solid note and its repeats trailing off behind it, each fainter and smaller. */
 export function buildRings(color: number): THREE.Group {
   const g = new THREE.Group();
-  for (let i = 0; i < 3; i++) {
-    const t = mesh(new THREE.TorusGeometry(0.4 + i * 0.34, 0.07 - i * 0.012, 12, 48), i === 0 ? M.glow(color, 3) : M.shell(color));
-    t.position.z = -i * 0.25;
-    g.add(t);
+  const lead = buildNote(color);
+  g.add(lead);
+  for (let i = 1; i <= 3; i++) {
+    const ghost = buildNote(color);
+    const fade = 0.62 - i * 0.16;
+    ghost.traverse((o) => {
+      if (o instanceof THREE.Mesh)
+        o.material = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(color).multiplyScalar(1.6),
+          transparent: true,
+          opacity: fade,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          toneMapped: false,
+        });
+    });
+    ghost.scale.setScalar(1 - i * 0.16);
+    ghost.position.set(i * 0.62, i * 0.2, -i * 0.5);
+    g.add(ghost);
   }
-  const dot = mesh(new THREE.SphereGeometry(0.18, 16, 12), M.glow(color, 3.5));
-  g.add(dot);
-  g.rotation.set(-0.3, 0.5, 0);
+  // the sound itself: a ring rippling out from the first note
+  const ring = mesh(new THREE.TorusGeometry(1.05, 0.045, 10, 56), M.glow(color, 2.6));
+  ring.position.set(0.1, 0.1, -0.2);
+  g.add(ring);
+  g.rotation.set(-0.15, -0.35, 0.08);
   return g;
 }
 

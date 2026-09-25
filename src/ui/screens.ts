@@ -346,9 +346,9 @@ export class HowToScreen {
           step(
             '5',
             'Drop it',
-            'Fill HYPE by silencing The Hush, then press Q. The room builds to the next downbeat — then everything doubles.',
+            'Fill HYPE by silencing enemies, then press Q. The room builds to the next downbeat — then everything doubles.',
             icons.pedal('hypeman'),
-            'Fill HYPE by silencing The Hush, then tap DROP. The room builds to the next downbeat — then everything doubles.',
+            'Fill HYPE by silencing enemies, then tap DROP. The room builds to the next downbeat — then everything doubles.',
           ),
           step('6', 'Headline three venues', 'Survive the set, beat the headliner, spend tips backstage. Win, and the crowd demands an ENCORE — endless and faster.', icons.goldRecord()),
         ]),
@@ -400,6 +400,10 @@ export interface ResultStats {
   newBestHit: boolean;
   /** rendered gold record, shown either side of the title on a win */
   trophy?: string;
+  /** the cheapest instrument still locked at the merch table */
+  nextUnlock?: { name: string; cost: number; have: number; icon: string };
+  /** riddle for a groove nobody has found yet */
+  rumour?: string;
 }
 
 export class ResultsScreen {
@@ -476,17 +480,19 @@ export class ResultsScreen {
         h('div', { class: 'rstat-v' }, [value, best ? h('span', { class: 'rbadge', text: 'NEW BEST' }) : null]),
         h('div', { class: 'rstat-l', text: label }),
       ]);
-    this.body.append(
-      stat('silenced', formatInt(r.kills), true, r.newBestKills),
-      stat('biggest hit', formatInt(r.bestHit), true, r.newBestHit),
-      stat('venues headlined', String(r.venuesCleared)),
-      stat('level', String(r.level)),
-      stat('best streak', formatInt(r.bestStreak)),
-      stat('perfect dashes', formatInt(r.perfects)),
-      stat('drops', formatInt(r.drops)),
-      stat('time', formatTime(r.time)),
-      stat('grooves found', String(r.grooves.length)),
-    );
+    // the headline numbers always show; the rest only when there's something to brag about
+    const tiles: [string, string, boolean, boolean, number][] = [
+      ['silenced', formatInt(r.kills), true, r.newBestKills, 1],
+      ['biggest hit', formatInt(r.bestHit), true, r.newBestHit, 1],
+      ['level', String(r.level), false, false, 1],
+      ['time', formatTime(r.time), false, false, 1],
+      ['venues headlined', String(r.venuesCleared), false, false, r.venuesCleared],
+      ['best streak', formatInt(r.bestStreak), false, false, r.bestStreak],
+      ['perfect dashes', formatInt(r.perfects), false, false, r.perfects],
+      ['drops', formatInt(r.drops), false, false, r.drops],
+      ['grooves found', String(r.grooves.length), false, false, r.grooves.length],
+    ];
+    for (const [label, value, hot, best, n] of tiles) if (n > 0) this.body.append(stat(label, value, hot, best));
     if (r.grooves.length) {
       this.body.append(
         h(
@@ -502,6 +508,26 @@ export class ResultsScreen {
     }
     // the machine you ended with
     this.body.append(h('div', { class: 'rgrooves' }, [machineView(r.tracks)]));
+    // …and the reasons to go again
+    const hooks = h('div', { class: 'rhooks' });
+    if (r.nextUnlock) {
+      const u = r.nextUnlock;
+      const k = Math.min(1, u.have / u.cost);
+      const bar = h('div', { class: 'rnext-bar' }, [h('i')]);
+      bar.style.setProperty('--k', k.toFixed(3));
+      hooks.append(
+        h('div', { class: `rnext${k >= 1 ? ' ready' : ''}` }, [
+          h('img', { src: u.icon, alt: '' }),
+          h('div', {}, [
+            h('div', { class: 'rnext-t', text: k >= 1 ? `${u.name.toUpperCase()} IS READY AT THE MERCH TABLE` : `NEXT UNLOCK · ${u.name.toUpperCase()}` }),
+            bar,
+            h('div', { class: 'rnext-n', text: `${formatInt(u.have)} / ${formatInt(u.cost)} fans` }),
+          ]),
+        ]),
+      );
+    }
+    if (r.rumour) hooks.append(h('div', { class: 'rrumour' }, [h('span', { text: 'GROOVE RUMOUR' }), `“${r.rumour}”`]));
+    if (hooks.childElementCount) this.body.append(hooks);
     this.shareText = [
       `ENCORE ${r.daily ? '· Daily Setlist ' : ''}· seed ${r.seedCode}`,
       `${r.won ? '🏆 headlined everything' : `💀 fell at ${r.venueName}`} · ${formatInt(r.kills)} silenced · biggest hit ${formatInt(r.bestHit)}`,

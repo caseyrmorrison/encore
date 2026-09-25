@@ -105,6 +105,7 @@ void main() {
   float pd = length(w - uPlayer);
   col += vec3(1.0, 0.8, 0.6) * 0.14 * smoothstep(7.0, 0.0, pd);
   col += ripples(w);
+  col = paintOver(col, w);
 
   // stage edge: glowing lip then the pit
   float edgeD = min(uHalf.x - abs(w.x), uHalf.y - abs(w.y));

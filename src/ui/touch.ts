@@ -57,7 +57,14 @@ export class TouchControls {
     window.addEventListener('pointercancel', this.onUp);
 
     this.el = h('div', { class: 'touch hidden' }, [this.zone, this.base, dash, this.dropBtn, pause]);
-    root.append(this.el);
+    // portrait phones get a gentle nudge (CSS shows it only in portrait on coarse pointers)
+    const rotate = h('div', { class: 'rotate-hint', role: 'button', tabIndex: 0 }, [
+      h('div', { class: 'rotate-phone' }),
+      h('div', { class: 'rotate-title', text: 'TURN IT SIDEWAYS' }),
+      h('div', { class: 'rotate-sub', text: 'The stage is wide. Tap to play anyway.' }),
+    ]);
+    rotate.addEventListener('click', () => rotate.classList.add('dismissed'));
+    root.append(this.el, rotate);
   }
 
   setActive(on: boolean): void {

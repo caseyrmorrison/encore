@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLSL_PAINT, PAINT_UNIFORMS } from '../paint';
 import type { ProgressionId } from '../../audio/theory';
 import type { Rng } from '../../core/rng';
 
@@ -130,6 +131,7 @@ vec3 ripples(vec2 w) {
   }
   return acc;
 }
+${GLSL_PAINT}
 `;
 
 export class RippleBank {
@@ -148,6 +150,8 @@ export class RippleBank {
     return {
       uRipples: { value: this.ripples },
       uRippleColors: { value: this.colors },
+      // shared by reference: one paint canvas feeds whichever floor is loaded
+      ...PAINT_UNIFORMS,
     };
   }
 }

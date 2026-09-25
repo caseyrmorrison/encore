@@ -132,6 +132,7 @@ void main() {
   float pd = length(w - uPlayer);
   col += vec3(1.0, 0.72, 0.45) * 0.09 * smoothstep(8.0, 0.0, pd);
   col += ripples(w);
+  col = paintOver(col, w);
 
   // outside the dance floor: dark worn concrete
   vec3 outside = vec3(0.022, 0.019, 0.021) * (0.5 + fbm(w * 0.35) * 0.9);
@@ -475,7 +476,7 @@ export class Basement implements Venue {
       collar.position.set(o.x, 0.18, o.z);
       this.group.add(collar);
       // the top is what the camera sees most: a matte capital (gloss reads as a grey disc from
-      // above) with a neon lip and an uplighter can so it looks rigged, not unfinished
+      // above) with two neon rings so it reads as part of the rig, not an unfinished cap
       const capMat = new THREE.MeshStandardMaterial({ color: 0x16131c, roughness: 0.9, metalness: 0, transparent: true });
       this.capMats.push(capMat);
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 1.3, o.r * 1.05, 0.6, 28), capMat);
@@ -489,13 +490,6 @@ export class Basement implements Venue {
       inner.rotation.x = Math.PI / 2;
       inner.position.set(o.x, 7.01, o.z);
       this.group.add(inner);
-      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.5, 18), capMat);
-      can.position.set(o.x, 7.25, o.z);
-      this.group.add(can);
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.27, 18), M.glow(0xfff0d0, 3));
-      lens.rotation.x = -Math.PI / 2;
-      lens.position.set(o.x, 7.51, o.z);
-      this.group.add(lens);
     });
 
     // haze near the floor

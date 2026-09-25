@@ -12,6 +12,7 @@ import { CameraRig } from '../render/cameraRig';
 import { IconFactory } from '../render/icons';
 import { makeClubEnvironment } from '../render/materials';
 import { NeonSign } from '../render/neonSign';
+import { PAINT_UNIFORMS, PaintLayer } from '../render/paint';
 import { DamageNumbers } from '../render/numbers';
 import { PlayerModel } from '../render/playerModel';
 import { QUALITY, Stage } from '../render/stage';
@@ -20,8 +21,8 @@ import { Basement } from '../render/venues/basement';
 import { Cathedral } from '../render/venues/cathedral';
 import { Mainstage } from '../render/venues/mainstage';
 import { cardRarity, drawGoldOffers, drawOffers, drawShopStock, PEDALS, type Card, type DraftContext, type PedalId } from '../seq/cards';
-import { GROOVES, type GrooveId } from '../seq/grooves';
-import { INSTRUMENTS, type InstrumentId } from '../seq/instruments';
+import { GROOVES, GROOVE_IDS, type GrooveId } from '../seq/grooves';
+import { INSTRUMENTS, INSTRUMENT_IDS, type InstrumentId } from '../seq/instruments';
 import { SETLISTS, SETLIST_IDS, type SetlistId } from '../seq/setlists';
 import { BackstageScreen, type ShopItem } from '../ui/backstage';
 import { describeCard } from '../ui/cardInfo';
@@ -100,6 +101,7 @@ export class Game {
   private readonly band = new Band();
   private readonly playerModel = new PlayerModel();
   private readonly sign = new NeonSign();
+  private readonly paint = new PaintLayer();
 
   private readonly hud: Hud;
   private readonly draftUi: DraftScreen;
@@ -126,6 +128,8 @@ export class Game {
   /** seconds left in the headliner's entrance (letterbox, spotlight, name slam) */
   private bossIntroT = 0;
   private bossHealed = 0;
+  /** dev: damage taken per source, for balance runs */
+  private readonly hurtLog: Record<string, number> = {};
   /** seconds since the final headliner fell (-1 = no finale): drives the victory lap camera */
   private finaleT = -1;
   private readonly player: Player = {
@@ -311,6 +315,10 @@ export class Game {
     };
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
+    // the first frame shouldn't be a dark wall: the sign flickers on by itself (silently)
+    setTimeout(() => {
+      if (this.state === 'title' && !this.sign.lit) this.sign.ignite();
+    }, 700);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         if (this.state === 'playing') this.pause();
@@ -427,6 +435,7 @@ export class Game {
       this.save.seenTutorial = true;
       writeSave(this.save);
       this.schedule(3.2, () =>
+        !this.boss &&
         this.hud.toast(
           this.touchMode ? 'Left thumb moves · tap DASH on the beat' : 'WASD move · MOUSE aim · SPACE dash on the beat',
           '#fff',
@@ -488,6 +497,8 @@ export class Game {
     this.venue = next;
     this.world.add(this.venue.group);
     this.applyVenueLook();
+    const b = next.bounds;
+    this.paint.reset(b.kind === 'rect' ? b.hx : b.r, b.kind === 'rect' ? b.hz : b.r);
     // compile every program now so the first spawn/explosion never hitches
     this.stage.renderer.compile(this.stage.scene, this.stage.camera);
   }
@@ -557,6 +568,13 @@ export class Game {
       this.save.dailyBest[k] = Math.max(this.save.dailyBest[k] ?? 0, run.kills);
     }
     writeSave(this.save);
+    // reasons to go again: the cheapest instrument still at the merch table, and a rumour
+    const locked = INSTRUMENT_IDS.filter((id) => UNLOCK_COST[id] !== undefined && !this.save.unlocked.includes(id)).sort(
+      (a, b) => UNLOCK_COST[a]! - UNLOCK_COST[b]!,
+    );
+    const next = locked[0];
+    const unknown = GROOVE_IDS.filter((g) => !this.save.grooves.includes(g));
+    const rumour = unknown.length ? GROOVES[unknown[Math.floor(Math.random() * unknown.length)]!].riddle : undefined;
     this.results.open({
       won,
       venueName: VENUE_NAMES[run.venueIndex] ?? 'THE VENUE',
@@ -579,6 +597,8 @@ export class Game {
       newBestKills,
       newBestHit,
       trophy: won ? this.icons.goldRecord() : undefined,
+      nextUnlock: next ? { name: INSTRUMENTS[next].name, cost: UNLOCK_COST[next]!, have: this.save.fans, icon: this.icons.instrument(next) } : undefined,
+      rumour,
     });
     this.resultsWon = won;
     if (won) {
@@ -946,7 +966,7 @@ export class Game {
       p.z,
       p.radius * 0.8,
       this.venue.bounds,
-      { hit: (pr, e) => this.projectileHit(pr, e), hitPlayer: (pr) => this.hurt(8 * (1 + run.venueIndex * 0.35), pr.x, pr.z) },
+      { hit: (pr, e) => this.projectileHit(pr, e), hitPlayer: (pr) => this.hurt(8 * (1 + run.venueIndex * 0.35), pr.x, pr.z, 'shot') },
       this.glow,
       this.dark,
       false,
@@ -1121,7 +1141,8 @@ export class Game {
         p.invuln = Math.max(p.invuln, 0.22);
       }
     }
-    if (this.input.take('drop')) this.callDrop();
+    // the autopilot drops as soon as it can, like an eager human would
+    if (this.input.take('drop') || (this.autopilot && this.dropState === 'ready')) this.callDrop();
 
     let vx: number;
     let vz: number;
@@ -1414,6 +1435,8 @@ export class Game {
     this.streakT = 1.6;
     run.bestStreak = Math.max(run.bestStreak, this.streak);
     const color = o.color;
+    // music paints the floor back: a neon splat in the colour of whatever landed the kill
+    this.paint.splat(e.x, e.z, 0.9 + e.scale * 0.5 + (e.elite ? 1.4 : 0), color, e.elite ? 2 : 1);
     // loot
     const xp = e.xp * (1 + run.loop * 0.5);
     if (xp > 0) {
@@ -1460,6 +1483,19 @@ export class Game {
       this.hud.streakCallout(w);
       V.crowdCheer(this.audio, this.audio.now, 0.4 + ms.indexOf(this.streak) * 0.1, 2);
     }
+  }
+
+  private healAcc = 0;
+
+  /** Hearts vacuumed together read as one "+125 HEALTH", not five stacked pills. */
+  private healToast(n: number): void {
+    if (this.healAcc === 0) {
+      this.schedule(0.35, () => {
+        this.hud.toast(`+${this.healAcc} HEALTH`, '#3dffb0');
+        this.healAcc = 0;
+      });
+    }
+    this.healAcc += n;
   }
 
   /** A plaque slides in from the left: the numbers are getting silly and the game says so. */
@@ -1512,7 +1548,7 @@ export class Game {
       case 'heart':
         this.heal(25);
         V.bell(this.audio, this.audio.now, 76, 0.7);
-        this.hud.toast('+25 HEALTH', '#ff3b5c');
+        this.healToast(25);
         break;
     }
   }
@@ -1555,7 +1591,7 @@ export class Game {
       if (!e.alive || e.spawnT < 0.6) return;
       const rr = p.radius + e.radius * 0.85;
       if ((e.x - p.x) ** 2 + (e.z - p.z) ** 2 < rr * rr) {
-        this.hurt(e.dmg * (1 + this.run!.loop * 0.4) * (1 + this.run!.loudness * 0.1), e.x, e.z);
+        this.hurt(e.dmg * (1 + this.run!.loop * 0.4) * (1 + this.run!.loudness * 0.1), e.x, e.z, e.scripted ? 'boss-body' : `touch:${e.kind}`);
         return true;
       }
     });
@@ -1566,8 +1602,11 @@ export class Game {
     let inside = false;
     for (const e of this.enemies.list) {
       if (!e.alive || e.kind !== 'damper') continue;
+      // a muffled zone, not a hole: a faint shade with a slow violet boundary pulse
       if (Math.random() < dt * 6)
-        this.shadowFx.add(GroundKind.Disc, e.x, e.z, DAMPER_RADIUS, DAMPER_RADIUS, 0.35, 0x000000, { fixed: true, alpha: 0.35 });
+        this.shadowFx.add(GroundKind.Disc, e.x, e.z, DAMPER_RADIUS, DAMPER_RADIUS, 0.35, 0x000000, { fixed: true, alpha: 0.16 });
+      if (Math.random() < dt * 1.5)
+        this.ground.add(GroundKind.Ring, e.x, e.z, DAMPER_RADIUS, DAMPER_RADIUS - 0.6, 0.9, 0x7a5cff, { thickness: 0.05, alpha: 0.5 });
       if ((e.x - p.x) ** 2 + (e.z - p.z) ** 2 < DAMPER_RADIUS * DAMPER_RADIUS) inside = true;
     }
     const cantorSilence = this.boss instanceof Cantor && this.boss.inSilence(p.x, p.z);
@@ -1575,17 +1614,19 @@ export class Game {
     this.silenced = inside || cantorSilence || hush;
     this.music.hushed = this.silenced;
     this.hud.setMuffled(inside || cantorSilence);
+    this.hud.setSilence(hush);
   }
 
   private godMode = false;
   private readonly pendingIntros: InstrumentId[] = [];
   private overlayOpen = false;
 
-  private hurt(amount: number, fromX: number, fromZ: number): void {
+  private hurt(amount: number, fromX: number, fromZ: number, source = 'other'): void {
     const p = this.player;
     const run = this.run!;
     if (p.invuln > 0 || p.dashT > 0 || this.state !== 'playing' || this.godMode) return;
     run.hp -= amount;
+    if (import.meta.env.DEV) this.hurtLog[source] = (this.hurtLog[source] ?? 0) + amount;
     p.invuln = 0.9;
     const dx = p.x - fromX;
     const dz = p.z - fromZ;
@@ -1664,7 +1705,7 @@ export class Game {
     this.stage.aberrationKick = 1;
     this.stage.bloomKick = 2.5;
     this.flashScreen('rgba(255,255,255,0.55)');
-    this.hud.announce('DROP!', `${run.stats.dropBars} BARS · EVERYTHING ×2`, '#ffffff', 1.8, true);
+    this.hud.announce('DROP!', `${run.stats.dropBars} BARS · EVERYTHING ×2`, '#ff2d78', 1.1, true);
     this.stage.surge = 1;
     this.buildT = 0;
     // confetti cannons from the four corners of the view
@@ -1746,7 +1787,7 @@ export class Game {
     this.bossIntroT = 2.6;
     this.slowMo = Math.max(this.slowMo, 2.2);
     p.invuln = Math.max(p.invuln, 3);
-    this.hud.setCinematic(true);
+    this.hud.setCinematic(true, true);
     this.hud.bossCard(this.boss.name, this.boss.title, css, VENUE_NAMES[run.venueIndex] ?? '');
     this.beams.add(bx, 0, bz, bx, 40, bz, 6, this.boss.color, 2.4);
     this.beams.add(bx, 0, bz, bx, 40, bz, 2.2, 0xffffff, 2.4);
@@ -2422,10 +2463,14 @@ export class Game {
       // paper confetti rains for the whole drop
       const acc = this.venue.palette.accents;
       for (let k = 0; k < 10; k++) {
+        // keep a clear window around the performer so the paper never hides them
+        let cx = (Math.random() - 0.5) * 44;
+        const cz = (Math.random() - 0.5) * 30;
+        if (Math.abs(cx) < 5 && Math.abs(cz) < 5) cx += Math.sign(cx || 1) * 6;
         this.dark.emit({
-          x: p.x + (Math.random() - 0.5) * 44,
+          x: p.x + cx,
           y: 16 + Math.random() * 4,
-          z: p.z + (Math.random() - 0.5) * 30,
+          z: p.z + cz,
           vx: (Math.random() - 0.5) * 2,
           vy: -6 - Math.random() * 4,
           vz: (Math.random() - 0.5) * 2,
@@ -2512,6 +2557,12 @@ export class Game {
     if (kick > 0.9 && drop) this.rig.punch(1.2);
     this.rig.update(rawDt, this.save.settings.shake);
     this.stage.baseBloom = 1.05 + (drop ? 0.5 : 0) + kick * 0.15;
+    // the Hush's silence drains the colour out of the room; music (a DROP) paints it back
+    const drained = this.boss instanceof TheHush && this.boss.silent;
+    this.stage.baseSaturation = damp(this.stage.baseSaturation, drained ? -0.62 : 0, drained ? 1.2 : 4, rawDt);
+    // the paint breathes with the kick and blazes during a drop
+    PAINT_UNIFORMS.uPaintGlow.value = 0.5 + kick * 0.45 + (drop ? 0.6 : 0) - this.buildT * 0.4;
+    this.paint.update(rawDt);
     if (drop && this.save.settings.flashes) this.stage.aberrationKick = Math.max(this.stage.aberrationKick, kick * 0.35);
   }
 
@@ -2586,7 +2637,7 @@ export class Game {
         if (e) this.spawnPuff(e);
       },
       shoot: (x, z, vx, vz, r) => this.enemyShoot(x, z, vx, vz, r),
-      hurtPlayer: (d, x, z) => this.hurt(d * (1 + (this.run?.loop ?? 0) * 0.4), x, z),
+      hurtPlayer: (d, x, z) => this.hurt(d * (1 + (this.run?.loop ?? 0) * 0.4), x, z, 'boss-attack'),
       shake: (n) => this.rig.addTrauma(n * this.save.settings.shake),
       roar: () => V.roar(this.audio, this.audio.now, 0.9),
       setSilence: (on) => {
@@ -2640,6 +2691,8 @@ export class Game {
           bestHit: this.run.bestHit,
           setTime: this.run.setTime,
           bpm: this.transport.bpm,
+          hurt: Object.fromEntries(Object.entries(this.hurtLog).map(([k, v]) => [k, Math.round(v)])),
+          boss: this.boss?.entry ? Math.round(this.boss.hpFrac * 100) : null,
         },
       prof: () => prof.report(),
       mix: () => import('../dev/mix').then((m) => m.mixReport()),

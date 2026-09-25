@@ -139,6 +139,7 @@ export class Hud {
     this.set('hype', Math.round(run.hype * 200), () => (this.hypeFill.style.transform = `scaleX(${run.hype})`));
     this.set('drop', dropState, () => {
       this.hypeWrap.dataset.state = dropState;
+      this.el.classList.toggle('dropping', dropState === 'active');
       this.hypeLabel.textContent =
         dropState === 'ready'
           ? document.documentElement.classList.contains('touch')
@@ -263,17 +264,21 @@ export class Hud {
     this.bannerT = 0;
     this.dismissStamps();
     this.stamps.add(el);
+    this.el.classList.add('stamping');
     document.body.append(el);
     setTimeout(() => el.classList.add('out'), 2300);
     setTimeout(() => {
       el.remove();
       this.stamps.delete(el);
+      if (!this.stamps.size) this.el.classList.remove('stamping');
     }, 2900);
   }
 
-  /** A drop owns the centre of the screen: any stamp still on it bows out immediately. */
+  /** A drop owns the centre of the screen: any stamp still on it is cut, not faded. */
   dismissStamps(): void {
-    for (const el of this.stamps) el.classList.add('out');
+    for (const el of this.stamps) el.remove();
+    this.stamps.clear();
+    this.el.classList.remove('stamping');
   }
 
   /** Giant beat countdown during a build-up. */
@@ -371,12 +376,20 @@ export class Hud {
   }
 
   /** Victory lap: the chrome steps aside so the show fills the screen. */
-  setCinematic(on: boolean): void {
-    this.set('cine', on ? 1 : 0, () => this.el.classList.toggle('cinematic', on));
+  setCinematic(on: boolean, letterbox = false): void {
+    this.set('cine', on ? (letterbox ? 2 : 1) : 0, () => {
+      this.el.classList.toggle('cinematic', on);
+      this.el.classList.toggle('letterbox', on && letterbox);
+    });
   }
 
   setBottomFade(on: boolean): void {
     this.set('bfade', on ? 1 : 0, () => this.bottom.classList.toggle('fade', on));
+  }
+
+  /** The Hush's silence: the machine greys out until a DROP breaks it. */
+  setSilence(on: boolean): void {
+    this.set('silence', on ? 1 : 0, () => this.el.classList.toggle('silence', on));
   }
 
   setMuffled(on: boolean): void {
