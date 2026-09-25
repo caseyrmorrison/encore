@@ -45,6 +45,7 @@ import { Band } from './band';
 import { Boss, Cantor, Feedback, TheHush, type BossCtx } from './bosses';
 import { Algorithm, Curfew, Mirage } from './festivalBosses';
 import { Director } from './director';
+import { pickRequest, type CrowdRequest } from './requests';
 import { CLUB_FINAL, FESTIVAL_START, isFinalStop, stopName, TOUR, TOUR_FINAL } from './tour';
 import { DAMPER_RADIUS, EnemyManager, type Enemy } from './enemies';
 import { Music, type NoteEvent } from './music';
@@ -129,6 +130,11 @@ export class Game {
   /** seconds left in the headliner's entrance (letterbox, spotlight, name slam) */
   private bossIntroT = 0;
   private bossHealed = 0;
+  /** this set's crowd request and the counters it's measured from */
+  private request: CrowdRequest | null = null;
+  private reqBase = { kills: 0, perfects: 0, drops: 0, grooves: 0 };
+  private reqStreak = 0;
+  private lastHitAt = 0;
   /** took any damage in this venue (Flawless Set badge) */
   private hitThisVenue = false;
   /** dev only: camera override for inspecting stages */
@@ -470,6 +476,10 @@ export class Game {
     this.bossIntroT = 0;
     this.finaleT = -1;
     this.hitThisVenue = false;
+    this.request = pickRequest(run.spawnRng, index, this.save.grooves.length >= GROOVE_IDS.length);
+    this.reqBase = { kills: run.kills, perfects: run.perfects, drops: run.drops, grooves: run.discovered.size };
+    this.reqStreak = 0;
+    this.lastHitAt = run.time;
     this.hud.setCinematic(false);
     this.player.x = 0;
     this.player.z = 4;
@@ -1093,6 +1103,7 @@ export class Game {
       this.dropState,
     );
     prof.end('hud');
+    this.updateRequest();
     if (this.rig.toScreen(p.x, 1, p.z, this.scr)) this.hud.fadeForPlayer(this.scr.y);
     this.processAnnouncements(rawDt);
   }
@@ -1584,6 +1595,45 @@ export class Game {
     this.healAcc += n;
   }
 
+  private requestProgress(): number {
+    const run = this.run!;
+    const q = this.request!;
+    switch (q.kind) {
+      case 'kills':
+        return run.kills - this.reqBase.kills;
+      case 'perfects':
+        return run.perfects - this.reqBase.perfects;
+      case 'drops':
+        return run.drops - this.reqBase.drops;
+      case 'streak':
+        this.reqStreak = Math.max(this.reqStreak, this.streak);
+        return this.reqStreak;
+      case 'untouched':
+        return Math.floor(run.time - this.lastHitAt);
+      case 'groove':
+        return run.discovered.size - this.reqBase.grooves;
+    }
+  }
+
+  private updateRequest(): void {
+    const q = this.request;
+    if (!q || !this.run) return this.hud.setRequest(null);
+    const n = q.done ? q.goal : this.requestProgress();
+    if (!q.done && n >= q.goal) {
+      q.done = true;
+      // the crowd got what it asked for: tips rain down
+      const run = this.run;
+      const bonus = 40 + run.venueIndex * 30;
+      run.tips += bonus;
+      const p = this.player;
+      for (let i = 0; i < 10; i++) this.pickups.spawn('tip', p.x, p.z, 2, 3);
+      this.hud.plaque('REQUEST PLAYED', `+${bonus} TIPS`, q.text, '#3dffb0');
+      V.crowdCheer(this.audio, this.audio.now, 1, 3);
+      this.music.fanfare(false);
+    }
+    this.hud.setRequest(q.text, n, q.goal, q.done);
+  }
+
   /** Earn a tour badge (once ever): a plaque, a bell run, and a new mic skin if it has one. */
   private award(id: BadgeId): void {
     if (this.save.badges.includes(id)) return;
@@ -1689,7 +1739,7 @@ export class Game {
       if (!e.alive || e.spawnT < 0.6) return;
       const rr = p.radius + e.radius * 0.85;
       if ((e.x - p.x) ** 2 + (e.z - p.z) ** 2 < rr * rr) {
-        const fest = 1 + Math.max(0, this.run!.venueIndex - 2) * 0.3;
+        const fest = 1 + Math.max(0, this.run!.venueIndex - 2) * 0.2;
         this.hurt(e.dmg * fest * (1 + this.run!.loop * 0.4) * (1 + this.run!.loudness * 0.1), e.x, e.z, e.scripted ? 'boss-body' : `touch:${e.kind}`);
         return true;
       }
@@ -1727,6 +1777,7 @@ export class Game {
     if (p.invuln > 0 || p.dashT > 0 || this.state !== 'playing' || this.godMode) return;
     run.hp -= amount;
     this.hitThisVenue = true;
+    this.lastHitAt = run.time;
     if (import.meta.env.DEV) this.hurtLog[source] = (this.hurtLog[source] ?? 0) + amount;
     p.invuln = 0.9;
     const dx = p.x - fromX;

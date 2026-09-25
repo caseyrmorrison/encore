@@ -3417,3 +3417,23 @@ div.touch {
 .results-panel .strip-slot {
   margin: -12px 0 14px;
 }
+
+/* the crowd's request for this set, under the set timer */
+.request {
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #ffe9a8;
+  background: rgba(255, 197, 61, 0.1);
+  border: 1px solid rgba(255, 197, 61, 0.35);
+  white-space: nowrap;
+}
+.request.done {
+  color: #0d0a14;
+  background: #3dffb0;
+  border-color: transparent;
+  box-shadow: 0 0 18px rgba(61, 255, 176, 0.6);
+}

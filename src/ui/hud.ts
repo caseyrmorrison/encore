@@ -22,6 +22,7 @@ export class Hud {
   private readonly tips: HTMLElement;
   private readonly level: HTMLElement;
   private readonly mini: HTMLElement;
+  private readonly request: HTMLElement;
   private miniCells: HTMLElement[][] = [];
   private miniVersion = -1;
   private miniStep = -1;
@@ -61,6 +62,7 @@ export class Hud {
     this.venueName = h('div', { class: 'venue-name' });
     this.setFill = h('div', { class: 'set-fill' });
     this.setTime = h('div', { class: 'set-time' });
+    this.request = h('div', { class: 'request hidden' });
     this.kills = h('div', { class: 'stat-val' });
     this.tips = h('div', { class: 'stat-val' });
     this.level = h('div', { class: 'lvl-badge' });
@@ -88,6 +90,7 @@ export class Hud {
         this.venueName,
         h('div', { class: 'set-bar' }, [this.setFill, h('i', { class: 'set-boss', text: '☠' })]),
         this.setTime,
+        this.request,
         this.bossBar,
       ]),
       h('div', { class: 'hud-tr' }, [
@@ -378,6 +381,17 @@ export class Hud {
     this.el.append(el);
     setTimeout(() => el.classList.add('out'), 2300);
     setTimeout(() => el.remove(), 2900);
+  }
+
+  /** The crowd's request for this set: text, progress, and a flourish when it's played. */
+  setRequest(text: string | null, progress = 0, goal = 1, done = false): void {
+    const key = text === null ? '' : `${text}|${Math.min(progress, goal)}|${done ? 1 : 0}`;
+    this.set('req', key, () => {
+      show(this.request, text !== null);
+      if (text === null) return;
+      this.request.classList.toggle('done', done);
+      this.request.textContent = done ? `✓ REQUEST PLAYED — ${text}` : `REQUEST · ${text} · ${Math.min(progress, goal)}/${goal}`;
+    });
   }
 
   /** Victory lap: the chrome steps aside so the show fills the screen. */
