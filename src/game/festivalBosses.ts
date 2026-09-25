@@ -689,20 +689,23 @@ export class Algorithm extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 30000, 3.6);
+    this.register(ctx, x, z, 22000, 3.6);
     this.group.position.set(x, 0, z);
   }
 
   onStep(ctx: BossCtx, step: number, bar: number): void {
     if (!this.entry?.alive) return;
     // AUTOPLAY: every lit step of YOUR machine fires back at you
+    // (a dense machine would make this a wall: the volley is capped, and in phase two it
+    // plays every step but aims either side of you on alternate steps)
     const hits = ctx.patternHits(step);
     if (hits > 0 && (this.phase === 2 || step % 2 === 0)) {
-      const base = Math.atan2(ctx.pz - this.z, ctx.px - this.x);
-      const n = Math.min(5, hits);
+      const side = this.phase === 2 ? (step % 2 ? 0.35 : -0.35) : 0;
+      const base = Math.atan2(ctx.pz - this.z, ctx.px - this.x) + side;
+      const n = Math.min(this.phase === 2 ? 2 : 3, hits);
       for (let i = 0; i < n; i++) {
-        const a = base + (i - (n - 1) / 2) * 0.22;
-        ctx.shoot(this.x + Math.cos(a) * 3.5, this.z + Math.sin(a) * 3.5, Math.cos(a) * 9, Math.sin(a) * 9, 0.45);
+        const a = base + (i - (n - 1) / 2) * 0.26;
+        ctx.shoot(this.x + Math.cos(a) * 3.5, this.z + Math.sin(a) * 3.5, Math.cos(a) * 8, Math.sin(a) * 8, 0.45);
       }
     }
     // SKIP: telegraph a spot beside you, then appear there with a burst
