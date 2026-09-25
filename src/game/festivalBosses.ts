@@ -196,7 +196,7 @@ export class Curfew extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 12000, 4.2);
+    this.register(ctx, x, z, 20000, 4.2);
     this.group.position.set(x, 0, z);
   }
 
@@ -211,10 +211,11 @@ export class Curfew extends Boss {
     // CITATIONS: a fan of paper aimed at you
     if (step === 8 || (this.phase === 2 && step === 12)) {
       const base = Math.atan2(ctx.pz - this.z, ctx.px - this.x);
-      const n = this.phase === 2 ? 9 : 7;
+      // an odd count with a wider spread: there's always a lane between two citations
+      const n = this.phase === 2 ? 7 : 5;
       for (let i = 0; i < n; i++) {
-        const a = base + (i - (n - 1) / 2) * 0.16;
-        ctx.shoot(this.x + Math.cos(a) * 3, this.z + Math.sin(a) * 3, Math.cos(a) * 10, Math.sin(a) * 10, 0.5);
+        const a = base + (i - (n - 1) / 2) * 0.22;
+        ctx.shoot(this.x + Math.cos(a) * 3, this.z + Math.sin(a) * 3, Math.cos(a) * 9, Math.sin(a) * 9, 0.5);
       }
       this.citeT = 1;
     }
@@ -447,7 +448,7 @@ export class Mirage extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 14000, 3);
+    this.register(ctx, x, z, 26000, 3);
     this.group.position.set(x, 0, z);
     this.split(ctx, 2);
   }
@@ -688,7 +689,7 @@ export class Algorithm extends Boss {
   }
 
   spawn(ctx: BossCtx, x: number, z: number): void {
-    this.register(ctx, x, z, 16000, 3.6);
+    this.register(ctx, x, z, 30000, 3.6);
     this.group.position.set(x, 0, z);
   }
 

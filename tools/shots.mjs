@@ -133,6 +133,7 @@ const S = {
       console.log(`[${n * 20}s]`, JSON.stringify(info));
       if (info.st === 'results' || info.st === 'title') break;
     }
+    console.log('fps', await fps());
   },
   async finale() {
     const fv = Number(opt('venue', '2'));

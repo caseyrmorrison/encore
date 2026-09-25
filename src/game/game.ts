@@ -1689,7 +1689,8 @@ export class Game {
       if (!e.alive || e.spawnT < 0.6) return;
       const rr = p.radius + e.radius * 0.85;
       if ((e.x - p.x) ** 2 + (e.z - p.z) ** 2 < rr * rr) {
-        this.hurt(e.dmg * (1 + this.run!.loop * 0.4) * (1 + this.run!.loudness * 0.1), e.x, e.z, e.scripted ? 'boss-body' : `touch:${e.kind}`);
+        const fest = 1 + Math.max(0, this.run!.venueIndex - 2) * 0.3;
+        this.hurt(e.dmg * fest * (1 + this.run!.loop * 0.4) * (1 + this.run!.loudness * 0.1), e.x, e.z, e.scripted ? 'boss-body' : `touch:${e.kind}`);
         return true;
       }
     });
