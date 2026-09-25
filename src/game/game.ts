@@ -18,8 +18,6 @@ import { PlayerModel } from '../render/playerModel';
 import { QUALITY, Stage } from '../render/stage';
 import { clampToBounds, pushOutOfObstacles, type Venue } from '../render/venues/venue';
 import { Basement } from '../render/venues/basement';
-import { Cathedral } from '../render/venues/cathedral';
-import { Mainstage } from '../render/venues/mainstage';
 import { cardRarity, drawGoldOffers, drawOffers, drawShopStock, PEDALS, type Card, type DraftContext, type PedalId } from '../seq/cards';
 import { GROOVES, GROOVE_IDS, type GrooveId } from '../seq/grooves';
 import { INSTRUMENTS, INSTRUMENT_IDS, type InstrumentId } from '../seq/instruments';
@@ -45,6 +43,7 @@ import { TouchControls } from '../ui/touch';
 import { Band } from './band';
 import { Boss, Cantor, Feedback, TheHush, type BossCtx } from './bosses';
 import { Director } from './director';
+import { CLUB_FINAL, FESTIVAL_START, isFinalStop, stopName, TOUR, TOUR_FINAL } from './tour';
 import { DAMPER_RADIUS, EnemyManager, type Enemy } from './enemies';
 import { Music, type NoteEvent } from './music';
 import { PickupManager, type Pickup } from './pickups';
@@ -73,7 +72,6 @@ interface Player {
   aimZ: number;
 }
 
-const VENUE_NAMES = ['THE BASEMENT', 'THE CATHEDRAL', 'THE MAINSTAGE'];
 
 const KILL_MILESTONES = [500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
 
@@ -129,6 +127,8 @@ export class Game {
   /** seconds left in the headliner's entrance (letterbox, spotlight, name slam) */
   private bossIntroT = 0;
   private bossHealed = 0;
+  /** dev only: camera override for inspecting stages */
+  private debugCam: { distance: number; pitch: number } | null = null;
   /** dev: damage taken per source, for balance runs */
   private readonly hurtLog: Record<string, number> = {};
   /** seconds since the final headliner fell (-1 = no finale): drives the victory lap camera */
@@ -498,7 +498,7 @@ export class Game {
   }
 
   private setVenue(index: number): void {
-    const next = index === 0 ? new Basement() : index === 1 ? new Cathedral() : new Mainstage();
+    const next = TOUR[Math.min(index, TOUR.length - 1)]!.make();
     this.world.remove(this.venue.group);
     this.venue.dispose();
     this.venue = next;
@@ -556,7 +556,7 @@ export class Game {
     this.draftUi.close();
     this.music.pattern = run.pattern;
     this.muffleTarget = 0.55;
-    const cleared = run.loop * 3 + run.venueIndex + (won ? 1 : 0);
+    const cleared = run.venuesCleared;
     const fans = Math.round(
       (run.kills / 18 + cleared * 70 + run.level * 4 + (won ? 250 : 0) + run.perfects) * (1 + run.loudness * 0.3) * (quit ? 0.5 : 1),
     );
@@ -585,7 +585,7 @@ export class Game {
     const rumour = unknown.length ? GROOVES[unknown[Math.floor(Math.random() * unknown.length)]!].riddle : undefined;
     this.results.open({
       won,
-      venueName: VENUE_NAMES[run.venueIndex] ?? 'THE VENUE',
+      venueName: stopName(run.venueIndex),
       venuesCleared: cleared,
       kills: run.kills,
       level: run.level,
@@ -605,6 +605,7 @@ export class Game {
       newBestKills,
       newBestHit,
       trophy: won ? this.icons.goldRecord() : undefined,
+      tier: run.venueIndex >= TOUR_FINAL ? 'world' : run.venueIndex >= CLUB_FINAL ? 'club' : undefined,
       nextUnlock: next ? { name: INSTRUMENTS[next].name, cost: UNLOCK_COST[next]!, have: this.save.fans, icon: this.icons.instrument(next) } : undefined,
       rumour,
     });
@@ -622,7 +623,8 @@ export class Game {
     if (!run) return;
     const blob = await renderPoster({
       won: this.resultsWon,
-      venueName: VENUE_NAMES[run.venueIndex] ?? 'THE VENUE',
+      world: this.resultsWon && run.venueIndex >= TOUR_FINAL,
+      venueName: stopName(run.venueIndex),
       kills: run.kills,
       bestHit: run.bestHit,
       level: run.level,
@@ -647,11 +649,12 @@ export class Game {
   private onResultsPrimary(): void {
     const run = this.run;
     if (this.resultsWon && run) {
-      // keep the same build: the encore loop
+      // keep the same build: headlining the Mainstage opens festival season; headlining
+      // Megafest sends the whole tour round again "after hours", harder
       this.results.setVisible(false);
-      run.loop++;
+      if (run.venueIndex >= TOUR_FINAL) run.loop++;
       run.hp = run.stats.maxHp;
-      this.beginVenue(0);
+      this.beginVenue(FESTIVAL_START);
       return;
     }
     this.startRun(run?.mode === 'daily' ? 'standard' : (run?.mode ?? 'standard'));
@@ -665,7 +668,7 @@ export class Game {
     this.state = 'paused';
     const run = this.run!;
     this.pauseUi.open({
-      venue: VENUE_NAMES[run.venueIndex] ?? 'THE VENUE',
+      venue: stopName(run.venueIndex),
       time: run.setTime,
       level: run.level,
       kills: run.kills,
@@ -1843,7 +1846,7 @@ export class Game {
     this.slowMo = Math.max(this.slowMo, 2.2);
     p.invuln = Math.max(p.invuln, 3);
     this.hud.setCinematic(true, true);
-    this.hud.bossCard(this.boss.name, this.boss.title, css, VENUE_NAMES[run.venueIndex] ?? '');
+    this.hud.bossCard(this.boss.name, this.boss.title, css, stopName(run.venueIndex));
     this.beams.add(bx, 0, bz, bx, 40, bz, 6, this.boss.color, 2.4);
     this.beams.add(bx, 0, bz, bx, 40, bz, 2.2, 0xffffff, 2.4);
     this.ground.add(GroundKind.Disc, bx, bz, 3, 9, 2.4, this.boss.color, { alpha: 0.4 });
@@ -1880,7 +1883,7 @@ export class Game {
     const color = new THREE.Color(boss.color);
     // everything on the field dies with the headliner; after the last one it goes out as a
     // ripple from where the Hush stood, so the room visibly empties in a wave of pops
-    const final = run.venueIndex >= 2;
+    const final = isFinalStop(run.venueIndex);
     for (const e of this.enemies.list) {
       if (!e.alive) continue;
       // the headliner's own adds lose their puppeteer and pop like everyone else
@@ -1916,11 +1919,11 @@ export class Game {
     this.world.remove(boss.group);
     for (let i = 0; i < 12; i++) this.pickups.spawn('tip', bx, bz, 5, 3);
     run.tips += 40;
-    if (run.venueIndex >= 2) {
+    if (isFinalStop(run.venueIndex)) {
       this.finale();
       return;
     }
-    this.hud.announce(`${VENUE_NAMES[run.venueIndex]} HEADLINED`, 'the crowd is losing its mind', '#ffe14d', 3.6);
+    this.hud.announce(`${stopName(run.venueIndex)} HEADLINED`, 'the crowd is losing its mind', '#ffe14d', 3.6);
   }
 
   /** The Hush falls: fireworks, a chanting crowd, and a stage lit gold. */
@@ -2034,7 +2037,8 @@ export class Game {
       this.boss.dispose();
       this.boss = null;
     }
-    if (run.venueIndex >= 2) {
+    run.venuesCleared++;
+    if (isFinalStop(run.venueIndex)) {
       this.endRun(true);
       return;
     }
@@ -2429,10 +2433,10 @@ export class Game {
     ed.setMode({ kind: 'free' });
     ed.refresh();
     this.backstage.attachEditor(ed.el);
-    const next = VENUE_NAMES[run.venueIndex + 1] ?? 'THE MAINSTAGE';
+    const next = stopName(run.venueIndex + 1);
     this.backstage.open(
       'BACKSTAGE',
-      `${VENUE_NAMES[run.venueIndex]} headlined. Spend your tips, rework the machine — next up is a bigger room.`,
+      `${stopName(run.venueIndex)} headlined. Spend your tips, rework the machine — next up is a bigger ${TOUR[run.venueIndex + 1]?.tier === 'festival' ? 'field' : 'room'}.`,
       `WALK OUT TO ${next} ▸`,
     );
     this.renderShop();
@@ -2608,6 +2612,10 @@ export class Game {
     this.rig.distance = damp(this.rig.distance, baseDist, this.rig.distance > baseDist + 8 ? 1.6 : 1.2, rawDt);
     this.rig.pitch = 0.98;
     this.rig.yaw = 0;
+    if (this.debugCam) {
+      this.rig.distance = this.debugCam.distance;
+      this.rig.pitch = this.debugCam.pitch;
+    }
     if (this.finaleT >= 0) {
       // victory lap: crane back and tilt up until the whole show is in frame — deck, crowd, LED wall
       this.finaleT += rawDt;
@@ -2743,6 +2751,8 @@ export class Game {
       hype: () => this.run && (this.run.hype = 1),
       skip: (t = 999) => this.run && (this.run.setTime = t),
       venue: (i: number) => this.run && this.beginVenue(i),
+      /** inspect a stage: override camera distance/pitch (cam(0) restores the follow cam) */
+      cam: (distance = 0, pitch = 0.98) => (this.debugCam = distance > 0 ? { distance, pitch } : null),
       god: () => (this.godMode = true),
       tips: (n = 500) => this.run && (this.run.tips += n),
       give: (inst: InstrumentId) => this.run && (this.run.pattern.addTrack(inst), this.checkGroovesLive()),

@@ -200,6 +200,24 @@ export class Music {
         if (ev.step === 0) V.pad(e, t, [0, 1, 2, 3].map((k) => chordTone(chord, k, 0)), barDur * 0.95, 0.65, 0.7);
         if (ev.step === 0 && ev.bar % 4 === 0) V.crowdCheer(e, t, 0.25 + this.crowd * 0.4, 3);
         break;
+      case 'fields':
+        // open-air: warm pad, a strummed bell arpeggio on the offbeats
+        if (ev.step === 0) V.pad(e, t, [0, 1, 2, 3].map((k) => chordTone(chord, k, 0)), barDur * 0.95, 0.55, 0.45);
+        if (ev.step % 4 === 2) V.bell(e, t, chordTone(chord, (ev.step / 4) | 0, 1), 0.28, e.bus.music, 0.8);
+        if (ev.step === 0 && ev.bar % 4 === 0) V.crowdCheer(e, t, 0.2 + this.crowd * 0.3, 3);
+        break;
+      case 'desert':
+        // night playa: a droning organ fifth and a wide choir every other bar
+        if (ev.step === 0) V.organ(e, t, [chordTone(chord, 0, -1), chordTone(chord, 2, -1)], barDur * 0.98, 0.3);
+        if (ev.step === 0 && ev.bar % 2 === 1) V.choir(e, t, [chordTone(chord, 0, 1), chordTone(chord, 1, 1)], barDur * 1.6, 0.4);
+        if (ev.step % 2 === 1) V.hat(e, t, 0.12);
+        break;
+      case 'megafest':
+        // stadium: huge supersaw-ish pad, an offbeat bass pump and a roaring crowd
+        if (ev.step === 0) V.pad(e, t, [0, 1, 2, 3].map((k) => chordTone(chord, k, 0)), barDur, 0.75, 0.85);
+        if (ev.step % 4 === 2) V.bass(e, t, chordTone(chord, 0, -2), ev.dur * 1.4, 0.35, 0);
+        if (ev.step === 0 && ev.bar % 2 === 0) V.crowdCheer(e, t, 0.3 + this.crowd * 0.5, 3);
+        break;
       case 'boss':
         if (ev.step === 0) V.pad(e, t, [0, 1, 2].map((k) => chordTone(chord, k, -1)), barDur, 0.6, 0.35);
         if (ev.step % 2 === 0) V.bass(e, t, chordTone(chord, 0, -2), ev.dur * 0.9, 0.32, 0);

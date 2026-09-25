@@ -406,6 +406,8 @@ export interface ResultStats {
   nextUnlock?: { name: string; cost: number; have: number; icon: string };
   /** riddle for a groove nobody has found yet */
   rumour?: string;
+  /** a won run: the club tour (Mainstage) or the whole world tour (Megafest) */
+  tier?: 'club' | 'world';
 }
 
 export class ResultsScreen {
@@ -456,8 +458,9 @@ export class ResultsScreen {
   }
 
   open(r: ResultStats): void {
-    this.title.textContent = r.won ? (r.loop > 0 ? `ENCORE ×${r.loop + 1}` : 'ENCORE!') : "SHOW'S OVER";
-    this.again.firstChild!.textContent = r.won ? 'ENCORE ▸ KEEP YOUR BUILD' : 'PLAY AGAIN';
+    const world = r.won && r.tier === 'world';
+    this.title.textContent = !r.won ? "SHOW'S OVER" : world ? (r.loop > 0 ? `WORLD TOUR ×${r.loop + 1}` : 'WORLD TOUR!') : 'ENCORE!';
+    this.again.firstChild!.textContent = !r.won ? 'PLAY AGAIN' : world ? 'ENCORE ▸ AFTER HOURS' : 'ON TO THE FESTIVALS ▸ KEEP YOUR BUILD';
     this.title.classList.toggle('won', r.won);
     this.panel.classList.toggle('won', r.won);
     for (const t of this.trophies) {
@@ -465,7 +468,9 @@ export class ResultsScreen {
       show(t, !!r.trophy);
     }
     this.sub.textContent = r.won
-      ? 'The crowd will not stop screaming.'
+      ? world
+        ? 'Every stage on Earth, headlined. The crowd wants it all again — louder.'
+        : 'The crowd will not stop screaming. Festival season is calling.'
       : `The silence took ${r.venueName}. The crowd wants more.`;
     clear(this.body);
     this.hero.textContent = '+0';

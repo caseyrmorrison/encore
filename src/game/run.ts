@@ -81,6 +81,8 @@ export class Run {
   readonly evolvedNow = new Set<InstrumentId>();
   stats: RunStats;
   venueIndex = 0;
+  /** headliners beaten this run (fans, results) */
+  venuesCleared = 0;
   loop = 0;
   level = 1;
   xp = 0;

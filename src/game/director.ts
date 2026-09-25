@@ -40,6 +40,34 @@ export const TUNING: VenueTuning[] = [
     elitesAt: [0.2, 0.4, 0.6, 0.8],
     ringsAt: [0.15, 0.35, 0.55, 0.75, 0.92],
   },
+  // festival season: open fields, far more Hush, everything tougher
+  {
+    length: 180,
+    rate0: 4.2,
+    rateGrowth: 1 / 12,
+    hp: 11,
+    unlock: { mote: 0, static: 0, shusher: 0, mute: 0, damper: 0.1 },
+    elitesAt: [0.15, 0.35, 0.55, 0.75, 0.9],
+    ringsAt: [0.12, 0.3, 0.5, 0.7, 0.88],
+  },
+  {
+    length: 190,
+    rate0: 5,
+    rateGrowth: 1 / 11,
+    hp: 19,
+    unlock: { mote: 0, static: 0, shusher: 0, mute: 0, damper: 0.05 },
+    elitesAt: [0.12, 0.3, 0.45, 0.6, 0.75, 0.9],
+    ringsAt: [0.1, 0.25, 0.4, 0.55, 0.7, 0.85],
+  },
+  {
+    length: 200,
+    rate0: 5.8,
+    rateGrowth: 1 / 10,
+    hp: 32,
+    unlock: { mote: 0, static: 0, shusher: 0, mute: 0, damper: 0 },
+    elitesAt: [0.1, 0.25, 0.4, 0.55, 0.7, 0.82, 0.92],
+    ringsAt: [0.08, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9],
+  },
 ];
 
 const WEIGHTS: Record<HushKind, number> = {

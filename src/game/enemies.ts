@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SpatialHash } from '../core/spatialHash';
 import { HushBatch, hushLooks, moteVariant, type HushKind } from '../render/hush';
+import type { VenueId } from '../render/venues/venue';
 import { clampToBounds, pushOutOfObstacles, type Bounds } from '../render/venues/venue';
 
 export interface EnemyDef {
@@ -179,7 +180,7 @@ export class EnemyManager {
   }
 
   /** Dress the fodder for the room. */
-  setVenue(id: 'basement' | 'cathedral' | 'mainstage'): void {
+  setVenue(id: VenueId): void {
     this.batches.mote.setGeometry(moteVariant(id));
   }
 

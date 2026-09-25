@@ -54,6 +54,37 @@ export const PROGRESSIONS = {
       { root: 50, intervals: MAJ, name: 'D' },
     ],
   },
+  // festival season: brighter, bigger keys as the fields get larger
+  fields: {
+    key: 'G major',
+    pentatonicRoot: 52,
+    chords: [
+      { root: 55, intervals: MAJ, name: 'G' },
+      { root: 50, intervals: MAJ, name: 'D' },
+      { root: 52, intervals: MIN7, name: 'Em7' },
+      { root: 48, intervals: MAJ7, name: 'Cmaj7' },
+    ],
+  },
+  desert: {
+    key: 'F# minor',
+    pentatonicRoot: 54,
+    chords: [
+      { root: 54, intervals: MIN, name: 'F#m' },
+      { root: 50, intervals: MAJ7, name: 'Dmaj7' },
+      { root: 57, intervals: MAJ, name: 'A' },
+      { root: 52, intervals: SUS2, name: 'Esus2' },
+    ],
+  },
+  megafest: {
+    key: 'B minor',
+    pentatonicRoot: 47,
+    chords: [
+      { root: 47, intervals: MIN, name: 'Bm' },
+      { root: 43, intervals: MAJ, name: 'G' },
+      { root: 50, intervals: MAJ, name: 'D' },
+      { root: 45, intervals: MAJ, name: 'A' },
+    ],
+  },
   boss: {
     key: 'C minor',
     pentatonicRoot: 48,

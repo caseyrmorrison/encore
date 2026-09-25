@@ -342,7 +342,7 @@ export function hushLooks(): Record<HushKind, HushLook> {
  * the Cathedral, headphone-wearing ravers on the Mainstage. Silhouettes only (the velvet stays
  * black), and all readable from the high camera.
  */
-export function moteVariant(venue: 'basement' | 'cathedral' | 'mainstage'): THREE.BufferGeometry {
+export function moteVariant(venue: string): THREE.BufferGeometry {
   const body = new THREE.SphereGeometry(0.5, 28, 20);
   body.scale(1, 0.9, 1);
   body.translate(0, 0.48, 0);

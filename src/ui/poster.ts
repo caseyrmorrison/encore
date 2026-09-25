@@ -3,6 +3,8 @@ import { isSafeImageSrc } from './dom';
 
 export interface PosterData {
   won: boolean;
+  /** headlined Megafest (the whole tour), not just the Mainstage */
+  world?: boolean;
   venueName: string;
   kills: number;
   bestHit: number;
@@ -123,7 +125,7 @@ export async function renderPoster(d: PosterData): Promise<Blob | null> {
   neon(g, 'ENCORE', W / 2, 190, 170, '#ff2d78');
   g.font = '44px Bungee, Impact, sans-serif';
   g.fillStyle = '#ffe9a8';
-  g.fillText(d.won ? 'HEADLINED EVERYTHING' : `LIVE AT ${d.venueName}`, W / 2, 320);
+  g.fillText(d.won ? (d.world ? 'HEADLINED EVERYTHING' : 'HEADLINED THE CLUB TOUR') : `LIVE AT ${d.venueName}`, W / 2, 320);
 
   // the band
   const icons = await Promise.all(d.tracks.map((t) => loadImage(t.icon)));

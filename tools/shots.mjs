@@ -124,16 +124,17 @@ const S = {
     }
   },
   async finale() {
+    const fv = Number(opt('venue', '2'));
     await start();
-    await E(() => {
+    await E((fv) => {
       const d = window.__encore;
       d.god();
       d.give('hat');
       d.give('lead');
-      d.venue(2);
+      d.venue(fv);
       d.skip(999);
-    });
-    await sleep(2500);
+    }, fv);
+    await sleep(3500);
     await E(() => {
       const g = window.__encore.game;
       if (g.boss?.entry) g.boss.entry.hp = 1;
@@ -489,6 +490,29 @@ const S = {
     });
     await dance(4000);
     await shot('boss3-silence');
+  },
+  /** Inspect any tour stop: --venue=N (3 fields, 4 desert, 5 megafest). Play shot, wide shot, far vista. */
+  async stage() {
+    const v = Number(opt('venue', '3'));
+    await start();
+    await E((v) => {
+      const d = window.__encore;
+      d.god();
+      for (const i of ['hat', 'bass', 'lead', 'clap']) d.give(i);
+      d.venue(v);
+    }, v);
+    await sleep(1800);
+    await E(() => window.__encore.spawn('mote', 50));
+    await dance(5000);
+    await shot(`stage${v}`);
+    await E(() => document.getElementById('ui').style.setProperty('visibility', 'hidden'));
+    await E(() => window.__encore.cam(95, 0.75));
+    await sleep(1500);
+    await shot(`stage${v}-wide`);
+    await E(() => window.__encore.cam(170, 0.5));
+    await sleep(1500);
+    await shot(`stage${v}-vista`);
+    await E(() => window.__encore.cam(0));
   },
   async cathedral() {
     await start();

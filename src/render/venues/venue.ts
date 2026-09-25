@@ -3,7 +3,7 @@ import { GLSL_PAINT, PAINT_UNIFORMS } from '../paint';
 import type { ProgressionId } from '../../audio/theory';
 import type { Rng } from '../../core/rng';
 
-export type VenueId = 'basement' | 'cathedral' | 'mainstage';
+export type VenueId = 'basement' | 'cathedral' | 'mainstage' | 'fields' | 'desert' | 'megafest';
 
 export type Bounds = { kind: 'rect'; hx: number; hz: number } | { kind: 'circle'; r: number };
 
@@ -58,6 +58,29 @@ export interface Venue {
   ripple(x: number, z: number, color: THREE.Color | number, strength?: number): void;
   spawnPoint(rng: Rng, px: number, pz: number, out: { x: number; z: number }): void;
   dispose(): void;
+}
+
+/**
+ * Spawn just off-screen around the performer (big festival fields would otherwise have the
+ * Hush walk for ten seconds from the far edge): a ring of radius 24–32, clamped inside the
+ * bounds and away from obstacles where possible.
+ */
+export function ringSpawn(
+  bounds: Bounds,
+  obstacles: readonly { x: number; z: number; r: number }[],
+  rng: Rng,
+  px: number,
+  pz: number,
+  out: { x: number; z: number },
+): void {
+  for (let tries = 0; tries < 10; tries++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(24, 32);
+    clampToBounds(bounds, px + Math.cos(a) * d, pz + Math.sin(a) * d, 1.5, out);
+    if (Math.hypot(out.x - px, out.z - pz) < 16) continue;
+    if (obstacles.some((o) => Math.hypot(out.x - o.x, out.z - o.z) < o.r + 1.5)) continue;
+    return;
+  }
 }
 
 export function clampToBounds(b: Bounds, x: number, z: number, r: number, out: { x: number; z: number }): boolean {
