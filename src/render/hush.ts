@@ -235,7 +235,7 @@ void main() {
   col = mix(col, eyeCol * 1.2, clamp(mouth, 0.0, 1.0) * 0.85);
   // glowing accessories (headphone cups, goggles, glowsticks…) in the venue's colour
   float acc = step(5.5, vPart);
-  col = mix(col, uAcc * (1.4 + uKick * 1.2), acc * (1.0 - uVoid));
+  col = mix(col, uAcc * (0.85 + uKick * 0.7), acc * (1.0 - uVoid));
 
   // frozen: icy crust
   col = mix(col, vec3(0.45, 0.8, 1.3) * (0.5 + fres), vState.z * 0.75);
@@ -478,7 +478,7 @@ export function moteVariant(venue: string): THREE.BufferGeometry {
       // a crown of glowing wildflowers
       for (let i = 0; i < 7; i++) {
         const a = (i / 7) * Math.PI * 2;
-        const f = new THREE.SphereGeometry(0.075, 8, 6);
+        const f = new THREE.SphereGeometry(0.06, 8, 6);
         f.translate(Math.cos(a) * 0.36, 0.92, Math.sin(a) * 0.36);
         parts.push(tagPart(f, PART.glow));
       }
@@ -529,7 +529,7 @@ export const ACCESSORY_COLOR: Record<string, number> = {
   basement: 0xff2d78,
   cathedral: 0xffd36b,
   mainstage: 0xff2dd4,
-  fields: 0xffe14d,
+  fields: 0xff8fd0,
   desert: 0x2ee6ff,
   megafest: 0x8cff5a,
 };
