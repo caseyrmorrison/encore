@@ -5,6 +5,8 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // injection-sink rules guard the shipped code; dev tools (tools/) test these sinks on purpose
+    files: ['src/**/*.ts'],
     rules: {
       'no-eval': 'error',
       'no-implied-eval': 'error',
@@ -44,6 +46,11 @@ export default tseslint.config(
           message: 'Set event handlers / URLs / styles through typed properties, not setAttribute.',
         },
       ],
+    },
+  },
+  {
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
   {
