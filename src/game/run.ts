@@ -83,6 +83,8 @@ export class Run {
   venueIndex = 0;
   /** headliners beaten this run (fans, results) */
   venuesCleared = 0;
+  /** what earlier results screens already paid fans for (festival continuation) */
+  paid = { kills: 0, cleared: 0, level: 0, perfects: 0 };
   loop = 0;
   level = 1;
   xp = 0;

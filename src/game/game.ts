@@ -579,9 +579,20 @@ export class Game {
     this.music.pattern = run.pattern;
     this.muffleTarget = 0.55;
     const cleared = run.venuesCleared;
+    // a run that keeps going into festival season pays out again at its next results
+    // screen: only for what's new since the last payout (festival stops pay double)
+    const paid = run.paid;
+    const fest = run.venueIndex >= FESTIVAL_START ? 2 : 1;
     const fans = Math.round(
-      (run.kills / 18 + cleared * 70 + run.level * 4 + (won ? 250 : 0) + run.perfects) * (1 + run.loudness * 0.3) * (quit ? 0.5 : 1),
+      ((run.kills - paid.kills) / 18 +
+        (cleared - paid.cleared) * 70 * fest +
+        (run.level - paid.level) * 4 +
+        (won ? 250 * fest : 0) +
+        (run.perfects - paid.perfects)) *
+        (1 + run.loudness * 0.3) *
+        (quit ? 0.5 : 1),
     );
+    run.paid = { kills: run.kills, cleared, level: run.level, perfects: run.perfects };
     this.save.fans += fans;
     this.save.totalFans += fans;
     this.lastFans = fans;
