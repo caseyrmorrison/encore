@@ -3003,3 +3003,14 @@ div.touch {
 .results-grid {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
+
+/* phones: the title menu stays tappable (bigger than the rest of the scaled chrome) */
+@media (max-height: 560px) {
+  .touch .title-menu {
+    zoom: 0.74;
+  }
+  .touch .setlist button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

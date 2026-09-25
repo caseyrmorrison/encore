@@ -13,6 +13,8 @@ export interface PosterData {
   daily: boolean;
   grooves: { genre: string; color: string }[];
   tracks: { short: string; css: string; notes: boolean[]; icon: string }[];
+  /** the floor this show painted, laid under the poster so no two are alike */
+  paint?: CanvasImageSource & { width: number; height: number };
 }
 
 const W = 1080;
@@ -85,6 +87,24 @@ export async function renderPoster(d: PosterData): Promise<Blob | null> {
     g.lineTo(W * bx - 260, H * 0.8);
     g.closePath();
     g.fill();
+  }
+  if (d.paint && d.paint.width > 0) {
+    // the painted floor, cropped to cover the sheet and glowing through the ink
+    const k = Math.max(W / d.paint.width, H / d.paint.height);
+    const pw = d.paint.width * k;
+    const ph = d.paint.height * k;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = 0.42;
+    g.drawImage(d.paint, (W - pw) / 2, (H - ph) / 2, pw, ph);
+    g.restore();
+    // keep the text areas legible: darken the middle band where the machine sits
+    const veil = g.createLinearGradient(0, 0, 0, H);
+    veil.addColorStop(0, 'rgba(7,4,13,0.35)');
+    veil.addColorStop(0.5, 'rgba(7,4,13,0.15)');
+    veil.addColorStop(1, 'rgba(7,4,13,0.45)');
+    g.fillStyle = veil;
+    g.fillRect(0, 0, W, H);
   }
   const img = g.getImageData(0, 0, W, H);
   for (let i = 0; i < img.data.length; i += 4) {

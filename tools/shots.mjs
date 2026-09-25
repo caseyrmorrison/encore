@@ -514,6 +514,9 @@ const S = {
       d.game.run.level = 31;
       d.game.run.time = 842;
       d.game.run.venueIndex = 2;
+      // a show's worth of paint on the floor (stands in for ~5,000 kills)
+      const cols = [0xff3b5c, 0xff9a2e, 0xffe14d, 0x2ee6ff, 0x8cff5a, 0xff5ec8, 0xb04dff];
+      for (let i = 0; i < 400; i++) d.game.paint.splat((Math.random() - 0.5) * 56, (Math.random() - 0.5) * 40, 1 + Math.random() * 1.5, cols[i % cols.length], 1);
     });
     await sleep(500);
     await E(() => window.__encore.results(true));

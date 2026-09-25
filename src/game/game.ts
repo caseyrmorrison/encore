@@ -629,6 +629,7 @@ export class Game {
         notes: [...t.notes],
         icon: this.icons.instrument(t.inst),
       })),
+      paint: this.paint.snapshot(),
     });
     if (blob) downloadBlob(blob, `encore-${seedToCode(run.seed).toLowerCase()}.png`);
   }
