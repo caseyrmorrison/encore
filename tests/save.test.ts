@@ -47,4 +47,19 @@ describe('save sanitising', () => {
     store.set('encore.save.v1', '{not json');
     expect(loadSave(storage).fans).toBe(0);
   });
+
+  it('keeps only known upgrades and clamps their levels', () => {
+    const s = sanitize({ upgrades: { amp: 3, dash: 9, presence: -4, lucky: 1.7, bogus: 5, toString: 3 } });
+    expect(s.upgrades.amp).toBe(3);
+    expect(s.upgrades.dash).toBe(1); // max level 1
+    expect(s.upgrades.presence).toBe(0);
+    expect(s.upgrades.lucky).toBe(1);
+    expect((s.upgrades as Record<string, number>).bogus).toBeUndefined();
+    expect(Object.keys(s.upgrades).sort()).toEqual(Object.keys(defaultSave().upgrades).sort());
+  });
+
+  it('ignores upgrade objects smuggled through __proto__', () => {
+    const s = sanitize(JSON.parse('{"upgrades": {"__proto__": {"amp": 5}}}'));
+    expect(s.upgrades.amp).toBe(0);
+  });
 });

@@ -24,6 +24,7 @@ import { cardRarity, drawGoldOffers, drawOffers, drawShopStock, PEDALS, type Car
 import { GROOVES, GROOVE_IDS, type GrooveId } from '../seq/grooves';
 import { INSTRUMENTS, INSTRUMENT_IDS, type InstrumentId } from '../seq/instruments';
 import { SETLISTS, SETLIST_IDS, type SetlistId } from '../seq/setlists';
+import { nextCost, type UpgradeId } from '../seq/upgrades';
 import { BackstageScreen, type ShopItem } from '../ui/backstage';
 import { describeCard } from '../ui/cardInfo';
 import { h } from '../ui/dom';
@@ -277,6 +278,7 @@ export class Game {
     });
     this.merch = new MerchScreen(uiRoot, this.icons, {
       buy: (id) => this.buyUnlock(id),
+      buyUpgrade: (id) => this.buyUpgrade(id),
       loudness: (n) => {
         this.save.loudness = n;
         writeSave(this.save);
@@ -424,7 +426,10 @@ export class Game {
       seedOverride ?? shared ?? (mode === 'daily' ? dailySeed(new Date()) : (Math.random() * 2 ** 32) >>> 0);
     const sl = SETLISTS[this.save.setlist as SetlistId];
     const setlist: SetlistId = mode === 'daily' || !sl || !sl.unlocked(this.save) ? 'garage' : sl.id;
-    this.run = new Run(seed, mode, this.save.loudness, setlist);
+    // the daily setlist is the same run for everyone: no personal upgrades there
+    this.run = new Run(seed, mode, this.save.loudness, setlist, mode === 'daily' ? undefined : this.save.upgrades);
+    this.player.maxCharges = 2 + this.run.meta.dash;
+    this.player.charges = this.player.maxCharges;
     this.newGroovesThisRun = 0;
     this.title.setVisible(false);
     this.results.setVisible(false);
@@ -722,6 +727,25 @@ export class Game {
     this.save.unlocked.push(id);
     writeSave(this.save);
     this.music.fanfare(true);
+    this.merch.open(this.save);
+    this.title.update(this.save, dailyKey(new Date()));
+  }
+
+  private buyUpgrade(id: UpgradeId): void {
+    const lvl = this.save.upgrades[id];
+    const cost = nextCost(id, lvl);
+    if (cost === null) return;
+    if (this.save.fans < cost) {
+      V.uiError(this.audio, this.audio.now);
+      return;
+    }
+    this.save.fans -= cost;
+    this.save.upgrades[id] = lvl + 1;
+    writeSave(this.save);
+    // a little rising fanfare that climbs with the level bought
+    const t = this.audio.now;
+    for (let k = 0; k <= lvl + 1; k++) V.bell(this.audio, t + k * 0.06, 76 + k * 3, 0.6);
+    V.crowdCheer(this.audio, t + 0.1, 0.4, 1.5);
     this.merch.open(this.save);
     this.title.update(this.save, dailyKey(new Date()));
   }
@@ -1549,7 +1573,7 @@ export class Game {
     const run = this.run!;
     switch (pk.kind) {
       case 'xp': {
-        run.xp += pk.value;
+        run.xp += pk.value * run.stats.xpMult;
         this.pickupChain++;
         this.pickupChainT = 0.5;
         if (this.pickupChain % 2 === 0 || pk.value > 3) this.music.pickup(this.pickupChain);
@@ -1676,7 +1700,7 @@ export class Game {
 
   private die(): void {
     const run = this.run!;
-    if (run.pedals.encore > run.revives) {
+    if (run.pedals.encore + run.meta.secondwind > run.revives) {
       run.revives++;
       run.hp = run.stats.maxHp * 0.6;
       this.player.invuln = 3;
@@ -2027,7 +2051,7 @@ export class Game {
       grooves: run.grooves,
       bpm: this.transport.bpm,
       unlocked: new Set(this.save.unlocked),
-      luck: 0,
+      luck: run.meta.lucky * 0.15,
     };
   }
 
@@ -2417,7 +2441,7 @@ export class Game {
 
   private stockShop(): void {
     const run = this.run!;
-    const ctx = { ...this.draftContext(), luck: 0.3 };
+    const ctx = { ...this.draftContext(), luck: 0.3 + run.meta.lucky * 0.15 };
     const cards = drawShopStock(ctx, run.lootRng);
     const price = (c: Card): number => {
       const r = cardRarity(c);

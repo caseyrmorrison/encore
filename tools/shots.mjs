@@ -564,6 +564,13 @@ const S = {
     await E(() => window.__encore.game.openMerch());
     await sleep(700);
     await shot('merch');
+    await page.locator('.merch-tab', { hasText: 'UPGRADES' }).click();
+    await sleep(500);
+    await shot('merch-upgrades');
+    // buy one to see levels fill
+    await page.locator('.merch-item.upgrade .btn.primary').first().click();
+    await sleep(500);
+    await shot('merch-bought');
   },
   async settings() {
     await start();

@@ -3,6 +3,8 @@ import type { SaveData, Settings } from '../core/save';
 import { GROOVES, GROOVE_IDS } from '../seq/grooves';
 import { INSTRUMENTS, INSTRUMENT_IDS, RARITY_COLOR, type InstrumentId } from '../seq/instruments';
 import { SETLISTS, type SetlistId } from '../seq/setlists';
+import { maxLevel, nextCost, UPGRADE_IDS, UPGRADES, type UpgradeIcon, type UpgradeId } from '../seq/upgrades';
+import type { PedalId } from '../seq/cards';
 import type { IconFactory } from '../render/icons';
 import { clear, h, isSafeImageSrc, show } from './dom';
 
@@ -560,23 +562,62 @@ export const UNLOCK_COST: Partial<Record<InstrumentId, number>> = {
   gong: 900,
 };
 
+function upgradeIcon(icons: IconFactory, i: UpgradeIcon): string {
+  switch (i.kind) {
+    case 'gear':
+      return icons.pedal(i.id as PedalId);
+    case 'heart':
+      return icons.heart();
+    case 'note':
+      return icons.note(i.color);
+    case 'fx':
+      return icons.fx(i.fx);
+    case 'gold':
+      return icons.goldRecord();
+    case 'mic':
+      return icons.mic();
+  }
+}
+
 export class MerchScreen {
   readonly el: HTMLElement;
   private readonly body: HTMLElement;
   private readonly fans: HTMLElement;
+  private readonly tabs: HTMLButtonElement[];
+  private tab: 'instruments' | 'upgrades' = 'instruments';
+  private last: SaveData | null = null;
 
   constructor(
     root: HTMLElement,
     private readonly icons: IconFactory,
-    private readonly a: { buy(id: InstrumentId): void; loudness(n: number): void; close(): void },
+    private readonly a: {
+      buy(id: InstrumentId): void;
+      buyUpgrade(id: UpgradeId): void;
+      loudness(n: number): void;
+      close(): void;
+    },
   ) {
     this.el = overlay('merch', 'Merch table');
     this.fans = h('div', { class: 'fans-count' });
     this.body = h('div', { class: 'merch-body' });
+    const tab = (id: 'instruments' | 'upgrades', label: string): HTMLButtonElement =>
+      h('button', {
+        class: 'merch-tab',
+        type: 'button',
+        text: label,
+        on: {
+          click: () => {
+            this.tab = id;
+            if (this.last) this.open(this.last);
+          },
+        },
+      });
+    this.tabs = [tab('instruments', 'INSTRUMENTS'), tab('upgrades', 'UPGRADES')];
     this.el.append(
       h('div', { class: 'panel' }, [
         h('div', { class: 'merch-head' }, [h('div', { class: 'panel-title big', text: 'MERCH TABLE' }), this.fans]),
-        h('div', { class: 'panel-sub', text: 'Fans follow you between runs. Spend them to add instruments to the draft pool.' }),
+        h('div', { class: 'panel-sub', text: 'Fans follow you between runs. Spend them on new instruments or on upgrades that stay with you.' }),
+        h('div', { class: 'merch-tabs' }, this.tabs),
         this.body,
         button('BACK', 'wide', a.close, 'ESC'),
       ]),
@@ -585,25 +626,56 @@ export class MerchScreen {
   }
 
   open(save: SaveData): void {
+    this.last = save;
     this.fans.textContent = `${formatInt(save.fans)} FANS`;
+    this.tabs.forEach((t, i) => t.classList.toggle('on', (i === 0) === (this.tab === 'instruments')));
     clear(this.body);
     const grid = h('div', { class: 'merch-grid' });
-    for (const id of INSTRUMENT_IDS) {
-      const d = INSTRUMENTS[id];
-      const owned = save.unlocked.includes(id);
-      const cost = UNLOCK_COST[id];
-      const afford = cost !== undefined && save.fans >= cost;
-      const item = h('div', { class: `merch-item${owned ? ' owned' : afford ? '' : ' locked'}` }, [
-        h('img', { src: this.icons.instrument(id), alt: '' }),
-        h('div', { class: 'merch-name', text: d.name.toUpperCase() }),
-        h('div', { class: 'merch-desc', text: d.weapon }),
-        owned
-          ? h('div', { class: 'merch-owned', text: 'IN THE POOL' })
-          : button(`${cost} FANS`, afford ? 'primary' : 'ghost', () => this.a.buy(id)),
-      ]);
-      item.style.setProperty('--accent', d.css);
-      item.style.setProperty('--rarity', RARITY_COLOR[d.rarity]);
-      grid.append(item);
+    if (this.tab === 'instruments') {
+      for (const id of INSTRUMENT_IDS) {
+        const d = INSTRUMENTS[id];
+        const owned = save.unlocked.includes(id);
+        const cost = UNLOCK_COST[id];
+        const afford = cost !== undefined && save.fans >= cost;
+        const item = h('div', { class: `merch-item${owned ? ' owned' : afford ? '' : ' locked'}` }, [
+          h('img', { src: this.icons.instrument(id), alt: '' }),
+          h('div', { class: 'merch-name', text: d.name.toUpperCase() }),
+          h('div', { class: 'merch-desc', text: d.weapon }),
+          owned
+            ? h('div', { class: 'merch-owned', text: 'IN THE POOL' })
+            : button(`${cost} FANS`, afford ? 'primary' : 'ghost', () => this.a.buy(id)),
+        ]);
+        item.style.setProperty('--accent', d.css);
+        item.style.setProperty('--rarity', RARITY_COLOR[d.rarity]);
+        grid.append(item);
+      }
+    } else {
+      grid.classList.add('upgrades');
+      for (const id of UPGRADE_IDS) {
+        const u = UPGRADES[id];
+        const lvl = save.upgrades[id];
+        const max = maxLevel(id);
+        const cost = nextCost(id, lvl);
+        const afford = cost !== null && save.fans >= cost;
+        const pips = h(
+          'div',
+          { class: 'merch-pips' },
+          Array.from({ length: max }, (_, k) => h('i', { class: k < lvl ? 'on' : '' })),
+        );
+        const item = h('div', { class: `merch-item upgrade${cost === null ? ' owned' : afford ? '' : ' locked'}` }, [
+          h('img', { src: upgradeIcon(this.icons, u.icon), alt: '' }),
+          h('div', { class: 'merch-name', text: u.name.toUpperCase() }),
+          pips,
+          lvl > 0 ? h('div', { class: 'merch-now', text: `NOW ${u.total(lvl).toUpperCase()}` }) : null,
+          h('div', { class: 'merch-desc', text: cost === null ? '' : u.blurb }),
+          cost === null
+            ? h('div', { class: 'merch-owned', text: 'MAXED' })
+            : button(`${formatInt(cost)} FANS`, afford ? 'primary' : 'ghost', () => this.a.buyUpgrade(id)),
+        ]);
+        item.style.setProperty('--accent', u.color);
+        item.style.setProperty('--rarity', u.color);
+        grid.append(item);
+      }
     }
     const loud = h('div', { class: 'loud' }, [
       h('div', { class: 'loud-title', text: 'LOUDNESS' }),

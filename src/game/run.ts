@@ -4,6 +4,7 @@ import { detectGrooves, type GrooveId, type GrooveState } from '../seq/grooves';
 import type { InstrumentId } from '../seq/instruments';
 import { Pattern, STEPS } from '../seq/pattern';
 import { SETLISTS, type SetlistId } from '../seq/setlists';
+import { emptyUpgrades, type UpgradeLevels } from '../seq/upgrades';
 
 export interface RunStats {
   dmgMult: number;
@@ -25,12 +26,19 @@ export interface RunStats {
   tipsMult: number;
   maxHp: number;
   bpmBonus: number;
+  xpMult: number;
 }
 
-export function computeStats(pedals: Record<PedalId, number>, grooves: GrooveState, loudness: number): RunStats {
+export function computeStats(
+  pedals: Record<PedalId, number>,
+  grooves: GrooveState,
+  loudness: number,
+  meta: UpgradeLevels = emptyUpgrades(),
+): RunStats {
   const g = grooves.active;
   return {
     dmgMult:
+      (1 + meta.amp * 0.08) *
       (1 + pedals.overdrive * 0.2) *
       (g.has('breakbeat') ? 1.2 : 1) *
       (g.has('wall') ? 1.4 : 1) *
@@ -40,19 +48,20 @@ export function computeStats(pedals: Record<PedalId, number>, grooves: GrooveSta
     projSpeed: 1 + pedals.wah * 0.25,
     range: 1 + pedals.wah * 0.15,
     area: 1 + pedals.ampstack * 0.2,
-    pickupRadius: 4.2 * (1 + pedals.groupies * 0.45),
+    pickupRadius: 4.2 * (1 + pedals.groupies * 0.45) * (1 + meta.magnet * 0.15),
     moveSpeed: 9.5 * (1 + pedals.energy * 0.1) * (g.has('breakbeat') ? 1.12 : 1),
     dashDist: 1 + pedals.stagedive * 0.3,
     perfectWindow: 0.085 + pedals.metronome * 0.045,
     perfectDmg: 1 + pedals.stagedive,
-    hypeGain: 1 + pedals.hypeman * 0.35,
+    hypeGain: (1 + pedals.hypeman * 0.35) * (1 + meta.hype * 0.1),
     dropBars: 2 + pedals.hypeman,
     pierce: pedals.sustain,
     harmonyPer: 0.18 + pedals.harmonizer * 0.12,
     looperChance: pedals.looper * 0.12,
-    tipsMult: 1 + pedals.goldchain * 0.6,
-    maxHp: 120 + pedals.roadie * 25 - loudness * 6,
+    tipsMult: (1 + pedals.goldchain * 0.6) * (1 + meta.tipjar * 0.15),
+    maxHp: 120 + pedals.roadie * 25 + meta.presence * 15 - loudness * 6,
     bpmBonus: pedals.clicktrack * 8,
+    xpMult: 1 + meta.session * 0.1,
   };
 }
 
@@ -96,8 +105,16 @@ export class Run {
   readonly setlist: SetlistId;
   private lastPatternVersion = -1;
 
-  constructor(seed: number, mode: RunMode, loudness: number, setlist: SetlistId = 'garage') {
+  /** permanent merch-table upgrades this run started with */
+  readonly meta: UpgradeLevels;
+
+  constructor(seed: number, mode: RunMode, loudness: number, setlist: SetlistId = 'garage', meta: UpgradeLevels = emptyUpgrades()) {
     this.seed = seed;
+    this.meta = { ...meta };
+    this.rerolls = 2 + this.meta.soundcheck;
+    // Warm-up Act: the band arrives already one level in, with a card to pick right away
+    this.level = 1 + this.meta.warmup;
+    this.pendingDrafts = this.meta.warmup;
     this.mode = mode;
     this.loudness = loudness;
     const root = new Rng(seed);
@@ -112,7 +129,7 @@ export class Run {
         for (const n of t.notes) tr.notes[n] = true;
       }
     }
-    this.stats = computeStats(this.pedals, this.grooves, loudness);
+    this.stats = computeStats(this.pedals, this.grooves, loudness, this.meta);
     this.stats.maxHp += SETLISTS[setlist].maxHpMod;
     this.stats.hypeGain *= SETLISTS[setlist].hypeMod;
     this.hp = this.stats.maxHp;
@@ -138,7 +155,7 @@ export class Run {
       }
     }
     const prevMax = this.stats.maxHp;
-    this.stats = computeStats(this.pedals, this.grooves, this.loudness);
+    this.stats = computeStats(this.pedals, this.grooves, this.loudness, this.meta);
     this.stats.maxHp += SETLISTS[this.setlist].maxHpMod;
     this.stats.hypeGain *= SETLISTS[this.setlist].hypeMod;
     if (this.stats.maxHp > prevMax) this.hp += this.stats.maxHp - prevMax;

@@ -2,6 +2,7 @@ import type { InstrumentId } from '../seq/instruments';
 import { INSTRUMENT_IDS } from '../seq/instruments';
 import type { GrooveId } from '../seq/grooves';
 import { GROOVE_IDS } from '../seq/grooves';
+import { emptyUpgrades, maxLevel, UPGRADE_IDS, type UpgradeLevels } from '../seq/upgrades';
 
 /**
  * Persistent meta-progression. Everything read from localStorage is treated as untrusted:
@@ -35,6 +36,8 @@ export interface SaveData {
   dailyBest: Record<string, number>;
   seenTutorial: boolean;
   setlist: string;
+  /** permanent upgrades bought at the merch table */
+  upgrades: UpgradeLevels;
 }
 
 const KEY = 'encore.save.v1';
@@ -71,6 +74,7 @@ export function defaultSave(): SaveData {
     dailyBest: {},
     seenTutorial: false,
     setlist: 'garage',
+    upgrades: emptyUpgrades(),
   };
 }
 
@@ -116,6 +120,13 @@ export function sanitize(raw: unknown): SaveData {
     autoAim: bool(s.autoAim, DEFAULT_SETTINGS.autoAim),
     flashes: bool(s.flashes, DEFAULT_SETTINGS.flashes),
   };
+  // upgrades: only known ids, integer levels clamped to each upgrade's max
+  if (r.upgrades && typeof r.upgrades === 'object') {
+    const u = r.upgrades as Record<string, unknown>;
+    for (const id of UPGRADE_IDS) {
+      if (Object.prototype.hasOwnProperty.call(u, id)) d.upgrades[id] = Math.floor(num(u[id], 0, maxLevel(id), 0));
+    }
+  }
   if (r.dailyBest && typeof r.dailyBest === 'object') {
     const entries = Object.entries(r.dailyBest as Record<string, unknown>)
       .filter(([k, v]) => DATE_KEY.test(k) && typeof v === 'number' && Number.isFinite(v))
