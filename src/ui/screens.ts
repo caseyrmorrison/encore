@@ -647,6 +647,14 @@ export class MerchScreen {
     this.fans.textContent = `${formatInt(save.fans)} FANS`;
     const order = ['instruments', 'upgrades', 'badges'] as const;
     this.tabs.forEach((t, i) => t.classList.toggle('on', order[i] === this.tab));
+    // a bubble on each shop tab: how many things you can buy right now
+    const canInst = INSTRUMENT_IDS.filter((id) => !save.unlocked.includes(id) && (UNLOCK_COST[id] ?? Infinity) <= save.fans).length;
+    const canUp = UPGRADE_IDS.filter((id) => (nextCost(id, save.upgrades[id]) ?? Infinity) <= save.fans).length;
+    [canInst, canUp].forEach((n, i) => {
+      const t = this.tabs[i]!;
+      if (n > 0) t.dataset.count = String(n);
+      else delete t.dataset.count;
+    });
     clear(this.body);
     const grid = h('div', { class: 'merch-grid' });
     if (this.tab === 'instruments') {

@@ -3437,3 +3437,20 @@ div.touch {
   border-color: transparent;
   box-shadow: 0 0 18px rgba(61, 255, 176, 0.6);
 }
+
+.merch-tab[data-count]::after {
+  content: attr(data-count);
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #140c00;
+  background: #ffc53d;
+  box-shadow: 0 0 10px rgba(255, 197, 61, 0.8);
+}
