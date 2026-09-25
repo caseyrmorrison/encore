@@ -1276,7 +1276,8 @@ export class Game {
         V.tom(this.audio, this.audio.now, 0.5, 12 - beatsLeft * 2);
       }
     }
-    if (ev.step % 4 === 0 && this.director) {
+    // once the headliner falls the room stays empty for the celebration
+    if (ev.step % 4 === 0 && this.director && !this.boss?.dead) {
       const orders = this.director.onBeat(run.setTime, this.transport.stepDur * 4, this.enemies.aliveCount, !!this.boss);
       for (const o of orders) this.release(o.kind, o.count, o.elite, o.ring);
     }
@@ -1340,6 +1341,7 @@ export class Game {
     const silence = this.silenced ? 0.5 : 1;
     const mult = harmony * (n.accent ? 2 : 1) * (n.ghost ? 0.6 : 1) * drop * silence;
     this.band.hit(n.inst, n.ghost ? 0.4 : n.accent ? 1.2 : 0.8);
+    this.paint.note(INSTRUMENTS[n.inst].color, n.ghost ? 0.35 : n.accent ? 1.2 : 0.85);
     this.venue.onNote?.(n.inst, n.ghost ? 0.4 : 1);
     fireTrack(this.weaponCtx, t, { step: n.step, mult, accent: n.accent, ghost: n.ghost });
   }
@@ -1402,7 +1404,7 @@ export class Game {
       let m = run.hitMilestone;
       while (m * 10 <= dmg) m *= 10;
       run.hitMilestone = m * 10;
-      this.celebrate('NEW RECORD HIT', formatInt(m), 'damage from a single note', '#ffc53d', e.x, e.z);
+      this.celebrate(`NEW RECORD HIT · ${formatInt(m)}+`, formatInt(Math.round(dmg)), 'damage from a single note', '#ffc53d', e.x, e.z);
     }
     if (!o.quiet) {
       // accumulate; flushed as one number per enemy every ~0.18s (or on death)
@@ -1810,6 +1812,7 @@ export class Game {
     // the entrance: bars close in, time drags, one spotlight finds the headliner
     this.hud.dismissStamps();
     this.hud.clearToasts();
+    this.projectiles.clear();
     const css = '#' + this.boss.color.toString(16).padStart(6, '0');
     this.bossIntroT = 2.6;
     this.slowMo = Math.max(this.slowMo, 2.2);
@@ -2087,7 +2090,8 @@ export class Game {
     this.queueStamp(() => {
       this.music.fanfare(true);
       V.scratch(this.audio, this.audio.now, 1, 0.28);
-      this.hud.stamp(d.genre, d.name, d.bonus, d.color, firstEver);
+      // with a headliner on stage (usually up top) the stamp lands low instead of on its face
+      this.hud.stamp(d.genre, d.name, d.bonus, d.color, firstEver, !!this.boss?.entry?.alive);
       if (this.state === 'playing') this.hitStop = Math.max(this.hitStop, 0.35);
     });
   }
@@ -2103,7 +2107,8 @@ export class Game {
   private processStamps(dt: number): void {
     this.stampCooldown -= dt;
     if (this.stampCooldown > 0 || !this.stampQueue.length) return;
-    if (this.dropState === 'queued' || this.dropState === 'active' || this.bossIntroT > 0) return;
+    // the centre belongs to drops, entrances and the victory lap
+    if (this.dropState === 'queued' || this.dropState === 'active' || this.bossIntroT > 0 || this.finaleT >= 0) return;
     this.stampQueue.shift()!();
     this.stampCooldown = 2.4;
   }
@@ -2588,7 +2593,12 @@ export class Game {
     const drained = this.boss instanceof TheHush && this.boss.silent && !this.boss.dead;
     this.stage.baseSaturation = damp(this.stage.baseSaturation, drained ? -0.62 : 0, drained ? 1.2 : 4, rawDt);
     // the paint breathes with the kick and blazes during a drop
-    PAINT_UNIFORMS.uPaintGlow.value = 0.5 + kick * 0.45 + (drop ? 0.6 : 0) - this.buildT * 0.4;
+    PAINT_UNIFORMS.uPaintGlow.value = 0.45 + kick * 0.35 + (drop ? 0.5 : 0) - this.buildT * 0.4;
+    // during a DROP a band of light sweeps the painted floor once per bar
+    const vb = this.venue.bounds;
+    const half = vb.kind === 'rect' ? vb.hx : vb.r;
+    const bp = this.transport.running ? this.transport.barPhase(this.audio.audibleTime()) : 0;
+    PAINT_UNIFORMS.uPaintSweep.value.set(-half + bp * half * 2, drop ? 1 : 0);
     this.paint.update(rawDt);
     if (drop && this.save.settings.flashes) this.stage.aberrationKick = Math.max(this.stage.aberrationKick, kick * 0.35);
   }

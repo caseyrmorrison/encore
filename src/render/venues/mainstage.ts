@@ -7,6 +7,7 @@ import {
   beamGeometry,
   GLSL_COMMON,
   makeBeamMaterial,
+  makeFlameMaterial,
   RippleBank,
   type Bounds,
   type FrameInfo,
@@ -151,7 +152,7 @@ void main() {
   col += vec3(1.0) * uDrop * step(0.5, fract(uTime * 8.0)) * 0.35;
   // pixel lettering, sampled at the LED cell centre so it stays chunky
   float tx = texture2D(uText, c).r * uTextAmt;
-  col = mix(col * (1.0 - uTextAmt * 0.7), uTextCol * (1.3 + beat * 1.2), tx);
+  col = mix(col * (1.0 - uTextAmt * 0.75), uTextCol * (0.95 + beat * 0.7), tx);
   col *= px;
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -202,6 +203,12 @@ export class Mainstage implements Venue {
   private readonly texts = new Map<string, THREE.CanvasTexture>();
   private barrierMat!: THREE.MeshBasicMaterial;
   private readonly pyro: THREE.Mesh[] = [];
+  private readonly pyroMat = makeFlameMaterial(0xff7a1a);
+  private readonly pyroGeo = (() => {
+    const g = new THREE.PlaneGeometry(2.6, 9, 1, 8);
+    g.translate(0, 4.5, 0);
+    return g;
+  })();
 
   constructor() {
     const acc = this.palette.accents.map((c) => new THREE.Color(c));
@@ -335,12 +342,9 @@ export class Mainstage implements Venue {
       const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 0.8, 12), M.darkChrome());
       base.position.set(x, 0.4, HZ + 1.2);
       this.group.add(base);
-      const flame = new THREE.Mesh(
-        new THREE.ConeGeometry(0.9, 7, 16, 1, true),
-        new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
-      flame.position.set(x, 4.2, HZ + 1.2);
-      flame.rotation.x = Math.PI;
+      // a billboarded flame sheet (a cone reads as a traffic cone from the high camera)
+      const flame = new THREE.Mesh(this.pyroGeo, this.pyroMat);
+      flame.position.set(x, 0.8, HZ + 1.2);
       this.group.add(flame);
       this.pyro.push(flame);
     }
@@ -565,7 +569,7 @@ export class Mainstage implements Venue {
     if (this.finaleOn || f.drop) {
       lu.uText!.value = this.text(this.finaleOn ? 'ENCORE!' : 'DROP!');
       lu.uTextAmt!.value = damp(lu.uTextAmt!.value as number, 1, 8, f.dt);
-      (lu.uTextCol!.value as THREE.Color).setHex(this.finaleOn ? 0xffd36b : 0xffffff);
+      (lu.uTextCol!.value as THREE.Color).setHex(this.finaleOn ? 0xffa820 : 0xff2d78);
     } else {
       lu.uTextAmt!.value = damp(lu.uTextAmt!.value as number, 0, 5, f.dt);
     }
@@ -611,9 +615,12 @@ export class Mainstage implements Venue {
       .multiplyScalar(1 + beat * 1.5);
     this.pyroT = Math.max(this.pyroT - f.dt, f.drop && beat > 0.9 ? 0.35 : 0);
     const fire = this.pyroT > 0 ? Math.min(1, this.pyroT * 3) : 0;
+    this.pyroMat.uniforms.uTime!.value = f.time;
+    this.pyroMat.uniforms.uPower!.value = fire;
     for (const p of this.pyro) {
-      (p.material as THREE.MeshBasicMaterial).opacity = fire * (0.7 + Math.random() * 0.3);
-      p.scale.set(1, 0.4 + fire * (0.8 + Math.random() * 0.4), 1);
+      p.visible = fire > 0.01;
+      if (f.camQuat) p.quaternion.copy(f.camQuat);
+      p.scale.set(1, 0.3 + fire * (0.8 + Math.random() * 0.3), 1);
     }
   }
 

@@ -752,7 +752,8 @@ export class TheHush extends Boss {
     if (!this.entry?.alive || this.stunned > 0) return;
     if (step === 0) {
       this.spin += 0.2;
-      this.radial(ctx, this.phase >= 2 ? 28 : 22, 8, this.spin, 0.6);
+      // rings wide enough to weave through: this is a finale, not a bullet wall
+      this.radial(ctx, this.phase >= 2 ? 20 : 16, 8, this.spin, 0.6);
     }
     if (step === 8 && this.phase >= 3) this.radial(ctx, 12, 10, -this.spin, 0.5);
     if (step === 4 && bar % 2 === 0) {

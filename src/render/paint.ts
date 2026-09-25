@@ -14,6 +14,11 @@ export const PAINT_UNIFORMS = {
   uPaintHalf: { value: new THREE.Vector2(30, 22) },
   /** 0..1 how hard the paint glows this frame (beat, drops) */
   uPaintGlow: { value: 0.6 },
+  /** the last few notes played: paint of the same colour flashes with them */
+  uNoteCols: { value: Array.from({ length: 6 }, () => new THREE.Color(0)) },
+  uNoteAmp: { value: [0, 0, 0, 0, 0, 0] },
+  /** DROP light wave: world x of the sweeping band, strength */
+  uPaintSweep: { value: new THREE.Vector2(0, 0) },
 };
 
 /** GLSL for the floor shaders (appended to GLSL_COMMON). */
@@ -21,13 +26,25 @@ export const GLSL_PAINT = /* glsl */ `
 uniform sampler2D uPaint;
 uniform vec2 uPaintHalf;
 uniform float uPaintGlow;
-// tint first (so a bright floor keeps the paint's hue instead of going white), then glow
+uniform vec3 uNoteCols[6];
+uniform float uNoteAmp[6];
+uniform vec2 uPaintSweep;
+// the paint is the light: darken the floor beneath it, then glow at full saturation. Each
+// splat flashes whenever an instrument of its colour plays, so the floor performs the pattern.
 vec3 paintOver(vec3 col, vec2 w) {
   vec2 uv = w / (2.0 * uPaintHalf) + 0.5;
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return col;
   vec4 p = texture2D(uPaint, uv);
-  col = mix(col, col * 0.35 + p.rgb * 0.55, p.a * 0.65);
-  return col + p.rgb * p.a * uPaintGlow * 0.55;
+  if (p.a < 0.01) return col;
+  vec3 pc = p.rgb / max(1e-3, max(p.r, max(p.g, p.b)));
+  float flash = 0.0;
+  for (int i = 0; i < 6; i++) {
+    vec3 nc = uNoteCols[i] / max(1e-3, max(uNoteCols[i].r, max(uNoteCols[i].g, uNoteCols[i].b)));
+    flash += uNoteAmp[i] * (1.0 - smoothstep(0.12, 0.45, distance(pc, nc)));
+  }
+  flash += uPaintSweep.y * smoothstep(3.5, 0.0, abs(w.x - uPaintSweep.x));
+  col = mix(col, col * 0.25, p.a * 0.75);
+  return col + p.rgb * p.a * (uPaintGlow * 0.8 + min(flash, 1.5) * 1.6);
 }
 `;
 
@@ -105,7 +122,19 @@ export class PaintLayer {
     this.dirty = true;
   }
 
+  private slot = 0;
+
+  /** A note sounded: paint of its colour answers. */
+  note(color: number, amp = 1): void {
+    const i = this.slot++ % 6;
+    PAINT_UNIFORMS.uNoteCols.value[i]!.setHex(color);
+    PAINT_UNIFORMS.uNoteAmp.value[i] = amp;
+  }
+
   update(dt: number): void {
+    const amps = PAINT_UNIFORMS.uNoteAmp.value;
+    const k = Math.exp(-dt * 9);
+    for (let i = 0; i < amps.length; i++) amps[i] = amps[i]! * k;
     this.cool -= dt;
     if (!this.dirty || this.cool > 0) return;
     this.texture.needsUpdate = true;

@@ -104,7 +104,9 @@ export class Band {
       m.root.scale.setScalar((1 + b * 0.35) * (1 + m.intro * 0.8));
       m.model.rotation.x = m.intro * 6;
       m.model.rotation.y = -a + Math.PI / 2 + Math.sin(time + i) * 0.2;
-      (m.halo.material as THREE.MeshBasicMaterial).opacity = (m.evolved ? 0.14 : 0.22) + b * 0.55;
+      // a big band dims its resting halos so the space around the player stays readable
+      const rest = (m.evolved ? 0.14 : 0.22) * (n > 4 ? 0.45 : 1);
+      (m.halo.material as THREE.MeshBasicMaterial).opacity = rest + b * 0.55;
       m.halo.scale.setScalar(1 + b * 0.8);
     });
   }

@@ -124,7 +124,9 @@ void main() {
     // real follow-spot pools: hard rim, soft interior
     float pool = smoothstep(uSpots[i].z, uSpots[i].z * 0.9, d);
     float rimEdge = smoothstep(uSpots[i].z * 0.8, uSpots[i].z * 0.97, d) * pool;
-    col += uSpotCols[i] * (pool * 0.55 + rimEdge * 0.9) * uSpots[i].w;
+    // near-white light with only a tint of colour: coloured discs would read as paint splats
+    vec3 lightCol = mix(vec3(1.0, 0.95, 0.9), uSpotCols[i], 0.35);
+    col += lightCol * (pool * 0.4 + rimEdge * 0.8) * uSpots[i].w;
   }
   col *= mix(0.12, 1.0, grout);
 

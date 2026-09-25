@@ -41,6 +41,18 @@ Every accomplishment gets a dedicated, never-overlapping centre-screen beat:
 - **Victory lap** — the final headliner's crowd pops outward in a ripple, the camera cranes back
   to reveal the whole show (crowd, LED wall spelling ENCORE!, pyro), fireworks keep going behind
   a gold results screen.
+- **Milestone plaques** — the first single hit of 1K / 10K / 100K / 1M…, and silenced-count
+  landmarks, slide in from the left edge (the centre belongs to the moments above).
+- **Perfect chains** — back-to-back on-beat dashes count up (PERFECT ×N) and ring higher.
+
+## Music paints the world back
+
+The Hush is silence, so it is colourless. Every kill splats neon in the colour of the instrument
+that landed it onto a paint layer the venue floors sample (tinted, then glowing on the kick,
+blazing during a DROP); perfect dashes leave gold footprints. A set leaves its own painted floor
+behind, and that floor becomes the background of the run's shareable poster. When THE HUSH
+takes the room into silence, the world drains to grey and the machine greys out until a DROP
+paints it back.
 
 ## Damage model (multiplicative on purpose)
 

@@ -2866,8 +2866,12 @@ div.touch {
   background: rgba(22, 17, 32, 0.94);
 }
 .results-panel .row {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
+}
+.results-panel .row .btn.primary {
+  flex: 0 0 100%;
 }
 .results-panel .row .btn {
   padding-inline: 16px;
@@ -2898,7 +2902,12 @@ div.touch {
 .rnext.ready {
   background: rgba(255, 197, 61, 0.12);
   border-color: rgba(255, 197, 61, 0.6);
-  animation: wonglow 0.9s ease-in-out infinite alternate;
+  animation: rnextready 0.9s ease-in-out infinite alternate;
+}
+@keyframes rnextready {
+  to {
+    box-shadow: 0 0 26px rgba(255, 197, 61, 0.55);
+  }
 }
 .rnext img {
   width: 54px;
@@ -2977,31 +2986,41 @@ div.touch {
   position: relative;
   filter: grayscale(1) brightness(0.55);
 }
+.hud.silence .groove-chips {
+  filter: grayscale(1) brightness(0.6);
+}
 .hud.silence .hud-bottom::after {
-  content: 'SILENCED — DROP TO BREAK IT';
+  content: 'MUTED — DROP TO BREAK IT';
   position: absolute;
   left: 50%;
   bottom: 38%;
   transform: translateX(-50%) rotate(-3deg);
   padding: 4px 14px;
-  border: 2px solid #b39cff;
+  border: 3px solid #fff;
   border-radius: 6px;
   font-family: var(--display);
-  font-size: 15px;
+  font-size: 17px;
   letter-spacing: 0.12em;
   white-space: nowrap;
-  color: #e6ddff;
-  background: rgba(20, 10, 40, 0.85);
-  box-shadow: 0 0 24px rgba(128, 96, 255, 0.6);
-  animation: blink 1.2s steps(2) infinite;
+  color: #fff;
+  background: #e0213f;
+  box-shadow:
+    0 0 0 3px #e0213f,
+    0 0 30px rgba(255, 40, 70, 0.8);
+  animation: mutedpulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes mutedpulse {
+  to {
+    transform: translateX(-50%) rotate(-3deg) scale(1.08);
+  }
 }
 .touch .hud.silence .hud-bottom::after {
-  content: 'SILENCED — TAP DROP';
+  content: 'MUTED — TAP DROP';
 }
 
-/* tiles flow into full rows however many there are to show */
+/* tiles fill balanced rows (the count is set from the stats shown) */
 .results-grid {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(var(--cols, 3), 1fr);
 }
 
 /* phones: the title menu stays tappable (bigger than the rest of the scaled chrome) */
@@ -3020,4 +3039,55 @@ div.touch {
   text-shadow:
     0 0 18px #ffc53d,
     0 0 40px #ff9a2e;
+}
+
+/* a headliner on stage: stamps shrink to a card on the left, clear of boss and performer */
+.stamp.low {
+  top: 30%;
+  left: 17%;
+  padding: 8px 18px;
+  border-width: 4px;
+}
+.stamp.low .stamp-genre {
+  font-size: 40px;
+}
+.stamp.low .stamp-name {
+  font-size: 15px;
+}
+.stamp.low .stamp-bonus {
+  font-size: 12px;
+}
+.hud.boss-mode .toasts {
+  top: auto;
+  bottom: 170px;
+}
+/* the HUD machine is the star: bigger cells, and it only dims (never vanishes) */
+.mini-cell {
+  width: 32px;
+  height: 15px;
+}
+.mini-seq.many .mini-cell {
+  height: 12px;
+}
+.mini-seq.many .mini-label {
+  line-height: 12px;
+}
+.hud-bottom.fade .mini-seq,
+.hud-bottom.fade .groove-chips {
+  opacity: 0.55;
+}
+.hud-tl {
+  width: 420px;
+}
+.pl-value {
+  font-size: 64px;
+}
+.plaque {
+  animation: plaquein 0.45s var(--ease-back) backwards, plaquepunch 0.5s var(--ease-out) 0.3s;
+}
+@keyframes plaquepunch {
+  30% {
+    transform: scale(1.12);
+    filter: brightness(1.6);
+  }
 }

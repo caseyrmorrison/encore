@@ -80,7 +80,7 @@ export class Hud {
 
     this.el = h('div', { class: 'hud hidden' }, [
       h('div', { class: 'hud-tl' }, [
-        h('div', { class: 'vu' }, [h('span', { class: 'vu-label', text: 'VU' }), h('div', { class: 'vu-bar' }, this.vu), this.hpText]),
+        h('div', { class: 'vu' }, [h('span', { class: 'vu-label', text: '♥ VU' }), h('div', { class: 'vu-bar' }, this.vu), this.hpText]),
         this.hypeWrap,
         h('div', { class: 'dash-row' }, [h('span', { class: 'dash-label', text: 'DASH' }), ...this.dash, this.beatDot]),
       ]),
@@ -248,11 +248,11 @@ export class Hud {
   /** Gig-poster stamp slammed onto the screen when a groove is discovered. */
   private readonly stamps = new Set<HTMLElement>();
 
-  stamp(genre: string, name: string, bonus: string, color: string, firstEver: boolean): void {
+  stamp(genre: string, name: string, bonus: string, color: string, firstEver: boolean, low = false): void {
     const el = h('div', { class: 'stamp' }, [
       h('div', {
         class: 'stamp-kicker',
-        text: name.endsWith('EVOLVED') ? '★ EVOLUTION ★' : firstEver ? 'NEW GENRE UNLOCKED' : 'GROOVE LOCKED IN',
+        text: name.endsWith('EVOLVED') ? '★ EVOLUTION ★' : firstEver ? 'NEW GROOVE DISCOVERED' : 'GROOVE LOCKED IN',
       }),
       h('div', { class: 'stamp-genre', text: genre }),
       h('div', { class: 'stamp-name', text: name }),
@@ -260,6 +260,7 @@ export class Hud {
     ]);
     el.style.setProperty('--g', color);
     el.style.setProperty('--rot', `${(Math.random() - 0.5) * 10}deg`);
+    el.classList.toggle('low', low);
     show(this.banner, false);
     this.bannerT = 0;
     this.dismissStamps();
@@ -333,6 +334,8 @@ export class Hud {
   }
 
   streakCallout(word: string): void {
+    // one tier at a time: a newer callout replaces the old one
+    for (const old of Array.from(this.streak.querySelectorAll('.streak-callout'))) old.remove();
     const c = h('div', { class: 'streak-callout', text: word });
     this.streak.append(c);
     setTimeout(() => c.remove(), 1400);

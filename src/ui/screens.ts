@@ -464,7 +464,7 @@ export class ResultsScreen {
     }
     this.sub.textContent = r.won
       ? 'The crowd will not stop screaming.'
-      : `The Hush took ${r.venueName}. The crowd wants more.`;
+      : `The silence took ${r.venueName}. The crowd wants more.`;
     clear(this.body);
     this.hero.textContent = '+0';
     const target = r.fans;
@@ -492,7 +492,10 @@ export class ResultsScreen {
       ['drops', formatInt(r.drops), false, false, r.drops],
       ['grooves found', String(r.grooves.length), false, false, r.grooves.length],
     ];
-    for (const [label, value, hot, best, n] of tiles) if (n > 0) this.body.append(stat(label, value, hot, best));
+    const shown = tiles.filter((t) => t[4] > 0);
+    // balanced rows: up to five across, otherwise two even rows
+    this.body.style.setProperty('--cols', String(shown.length <= 5 ? shown.length : Math.ceil(shown.length / 2)));
+    for (const [label, value, hot, best] of shown) this.body.append(stat(label, value, hot, best));
     if (r.grooves.length) {
       this.body.append(
         h(
@@ -521,7 +524,7 @@ export class ResultsScreen {
           h('div', {}, [
             h('div', { class: 'rnext-t', text: k >= 1 ? `${u.name.toUpperCase()} IS READY AT THE MERCH TABLE` : `NEXT UNLOCK · ${u.name.toUpperCase()}` }),
             bar,
-            h('div', { class: 'rnext-n', text: `${formatInt(u.have)} / ${formatInt(u.cost)} fans` }),
+            h('div', { class: 'rnext-n', text: k >= 1 ? `${formatInt(u.have)} fans · enough to buy it now` : `${formatInt(u.have)} / ${formatInt(u.cost)} fans` }),
           ]),
         ]),
       );
