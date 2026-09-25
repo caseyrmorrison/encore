@@ -472,6 +472,7 @@ export class ResultsScreen {
     this.title.textContent = !r.won ? "SHOW'S OVER" : world ? (r.loop > 0 ? `WORLD TOUR ×${r.loop + 1}` : 'WORLD TOUR!') : 'ENCORE!';
     this.again.firstChild!.textContent = !r.won ? 'PLAY AGAIN' : world ? 'ENCORE ▸ AFTER HOURS' : 'ON TO THE FESTIVALS ▸ KEEP YOUR BUILD';
     this.title.classList.toggle('won', r.won);
+    this.title.classList.toggle('long', (this.title.textContent ?? '').length > 9);
     this.panel.classList.toggle('won', r.won);
     for (const t of this.trophies) {
       if (r.trophy && isSafeImageSrc(r.trophy)) t.src = r.trophy;

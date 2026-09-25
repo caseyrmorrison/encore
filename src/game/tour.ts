@@ -1,10 +1,30 @@
 import { Basement } from '../render/venues/basement';
 import { Cathedral } from '../render/venues/cathedral';
-import { Desert } from '../render/venues/desert';
-import { Fields } from '../render/venues/fields';
 import { Mainstage } from '../render/venues/mainstage';
-import { Megafest } from '../render/venues/megafest';
 import type { Venue, VenueId } from '../render/venues/venue';
+
+/**
+ * The festival stages are big and only needed after the club tour, so they live in their
+ * own chunk: fetched quietly once the title is up, and awaited (almost always instantly)
+ * before the tour goes outside.
+ */
+type FestivalModule = typeof import('./festivals');
+let festivals: FestivalModule | null = null;
+let festivalsLoading: Promise<FestivalModule> | null = null;
+
+export function loadFestivals(): Promise<FestivalModule> {
+  festivalsLoading ??= import('./festivals').then((m) => (festivals = m));
+  return festivalsLoading;
+}
+
+export const festivalsLoaded = (): boolean => festivals !== null;
+
+function festival(name: 'Fields' | 'Desert' | 'Megafest'): () => Venue {
+  return () => {
+    if (!festivals) throw new Error('festival stages not loaded yet');
+    return new festivals[name]();
+  };
+}
 
 /**
  * The tour. Three clubs make a run; headline the Mainstage and the encore takes the same
@@ -22,9 +42,9 @@ export const TOUR: readonly TourStop[] = [
   { id: 'basement', name: 'THE BASEMENT', tier: 'club', make: () => new Basement() },
   { id: 'cathedral', name: 'THE CATHEDRAL', tier: 'club', make: () => new Cathedral() },
   { id: 'mainstage', name: 'THE MAINSTAGE', tier: 'club', make: () => new Mainstage() },
-  { id: 'fields', name: 'SUNSET FIELDS', tier: 'festival', make: () => new Fields() },
-  { id: 'desert', name: 'NEON DESERT', tier: 'festival', make: () => new Desert() },
-  { id: 'megafest', name: 'MEGAFEST', tier: 'festival', make: () => new Megafest() },
+  { id: 'fields', name: 'SUNSET FIELDS', tier: 'festival', make: festival('Fields') },
+  { id: 'desert', name: 'NEON DESERT', tier: 'festival', make: festival('Desert') },
+  { id: 'megafest', name: 'MEGAFEST', tier: 'festival', make: festival('Megafest') },
 ];
 
 /** The Mainstage: headlining it wins a run (and opens festival season). */

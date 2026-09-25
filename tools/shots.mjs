@@ -79,6 +79,7 @@ const dance = async (ms) => {
 const start = async () => {
   await page.mouse.click(w / 2, hgt / 2);
   await sleep(300);
+  await E(() => window.__encore.ready?.());
   await E(() => window.__encore.game.startRun('standard'));
   await sleep(500);
   await page.mouse.move(w / 2 + 200, hgt / 2 - 100);

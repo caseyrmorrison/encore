@@ -46,7 +46,7 @@ import { Boss, Cantor, Feedback, TheHush, type BossCtx } from './bosses';
 import { Algorithm, Curfew, Mirage } from './festivalBosses';
 import { Director } from './director';
 import { pickRequest, type CrowdRequest } from './requests';
-import { CLUB_FINAL, FESTIVAL_START, isFinalStop, stopName, TOUR, TOUR_FINAL } from './tour';
+import { CLUB_FINAL, FESTIVAL_START, festivalsLoaded, isFinalStop, loadFestivals, stopName, TOUR, TOUR_FINAL } from './tour';
 import { DAMPER_RADIUS, EnemyManager, type Enemy } from './enemies';
 import { Music, type NoteEvent } from './music';
 import { PickupManager, type Pickup } from './pickups';
@@ -324,6 +324,8 @@ export class Game {
       if (this.state === 'title' && !this.title.revealed) {
         this.title.reveal();
         this.sign.ignite();
+        // fetch the festival stages in the background while the player is in the clubs
+        setTimeout(() => void loadFestivals().catch(() => undefined), 4000);
         V.impact(this.audio, this.audio.now + 0.02, 0.5);
         this.buzz();
         if (!this.transport.running) this.transport.start(this.audio.now + 0.1);
@@ -693,7 +695,7 @@ export class Game {
       this.results.setVisible(false);
       if (run.venueIndex >= TOUR_FINAL) run.loop++;
       run.hp = run.stats.maxHp;
-      this.beginVenue(FESTIVAL_START);
+      void loadFestivals().then(() => this.beginVenue(FESTIVAL_START));
       return;
     }
     this.startRun(run?.mode === 'daily' ? 'standard' : (run?.mode ?? 'standard'));
@@ -2647,8 +2649,11 @@ export class Game {
     run.refresh();
     this.backstage.close();
     this.editor?.setMode({ kind: 'free' });
-    this.beginVenue(run.venueIndex + 1);
-    this.schedule(1.5, () => this.playIntros());
+    const next = run.venueIndex + 1;
+    void (next >= FESTIVAL_START ? loadFestivals() : Promise.resolve()).then(() => {
+      this.beginVenue(next);
+      this.schedule(1.5, () => this.playIntros());
+    });
   }
 
   /* ───────────────────────────── visuals ───────────────────────────── */
@@ -2896,7 +2901,13 @@ export class Game {
       gold: () => this.run && this.run.pendingGold++,
       hype: () => this.run && (this.run.hype = 1),
       skip: (t = 999) => this.run && (this.run.setTime = t),
-      venue: (i: number) => this.run && this.beginVenue(i),
+      venue: (i: number) => {
+        if (!this.run) return;
+        if (i < FESTIVAL_START || festivalsLoaded()) this.beginVenue(i);
+        else void loadFestivals().then(() => this.beginVenue(i));
+      },
+      /** scripts: make sure the festival chunk is in before driving festival stops */
+      ready: () => loadFestivals().then(() => true),
       badge: (id: BadgeId) => this.award(id),
       /** inspect a stage: override camera distance/pitch (cam(0) restores the follow cam) */
       cam: (distance = 0, pitch = 0.98) => (this.debugCam = distance > 0 ? { distance, pitch } : null),

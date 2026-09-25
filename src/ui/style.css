@@ -3488,3 +3488,15 @@ div.touch {
     height: 64px;
   }
 }
+
+.results-title.long {
+  font-size: clamp(38px, 6.2vw, 78px);
+  white-space: nowrap;
+}
+.tour-strip {
+  gap: 4px;
+}
+.tour-stop {
+  padding: 2px 8px;
+  font-size: 10px;
+}
